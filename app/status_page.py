@@ -96,7 +96,7 @@ def render(worker_alive: bool, worker_tick: float) -> str:
         for day in sorted(per_day, reverse=True):
             v = per_day[day]
             br = ", ".join(f"{k} {n}" for k, n in sorted(v.items()) if k != "_total")
-            out.append(f'<tr><td>{e(day)}</td><td class="total"><span class="bc-total"><span class="bc-bar" style="width:{max(6, int(200 * v["_total"] / mx))}px"></span>'
+            out.append(f'<tr><td class="day">{e(day)}</td><td class="total"><span class="bc-total"><span class="bc-bar" style="width:{max(6, int(200 * v["_total"] / mx))}px"></span>'
                        f'<span class="bc-fig">{v["_total"]}</span></span></td><td class="mute">{e(br)}</td></tr>')
         out.append("</table></section>")
 
