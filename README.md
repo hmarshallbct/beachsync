@@ -204,7 +204,9 @@ The suite uses in-memory fakes of both APIs with the real payload shapes.
 `https://beachsync.bctuk.com/status` (LAN/tailnet only, wildcard cert, vhost in
 `deploy/nginx-beachsync-lan.conf`): service state, last webhook, counts,
 events per day, failures needing attention, recent events. Ids only, no
-personal data. `/status.json` for the raw numbers.
+personal data. `/status.json` for the raw numbers. `/events` lists the queue with status and
+source filters; `/sweeps` shows every nightly new-id and daily drift run with
+what it found, how the queued events turned out, and the drift CSV to download.
 
 **Kill switch** on the status page: *Pause sync* (one click, optional reason)
 stops all HubSpot writes immediately and persists across restarts; webhooks keep

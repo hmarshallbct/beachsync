@@ -67,13 +67,20 @@ def sweep_drift(report_path: str) -> dict:
     from app.reconcile_report import main as report
     report(["--out", report_path, "--threads", "8"])
     to_queue = {"customer": set(), "agent": set()}
+    summary: dict = {}
+    try:
+        with open(report_path.rsplit(".", 1)[0] + ".summary.json") as fh:
+            summary = json.load(fh)
+    except (OSError, ValueError):
+        pass
     with open(report_path, newline="", encoding="utf-8") as fh:
         for row in csv.DictReader(fh):
             if row["would_update"] == "yes" and row["field"] != "<no hubspot record>":
                 to_queue["customer" if row["entity"] == "customer" else "agent"].add(int(row["tigerbay_id"]))
     for entity, ids in to_queue.items():
         db.enqueue_many(entity, "modified", sorted(ids), source="sweep")
-    return {k: len(v) for k, v in to_queue.items()}
+    return {"customer": len(to_queue["customer"]), "agent": len(to_queue["agent"]),
+            "report": summary, "queued_ids": {k: sorted(v)[:500] for k, v in to_queue.items()}}
 
 
 def main(argv=None) -> int:
@@ -82,8 +89,14 @@ def main(argv=None) -> int:
     ap.add_argument("what", choices=["new-ids", "drift"])
     ap.add_argument("--report", default=f"/data/drift-{time.strftime('%Y-%m-%d')}.csv")
     args = ap.parse_args(argv)
-    result = sweep_new_ids() if args.what == "new-ids" else sweep_drift(args.report)
-    print(json.dumps(result))
+    sid = db.start_sweep(args.what)
+    try:
+        result = sweep_new_ids() if args.what == "new-ids" else sweep_drift(args.report)
+    except Exception as exc:  # noqa: BLE001
+        db.finish_sweep(sid, ok=False, error=f"{type(exc).__name__}: {exc}")
+        raise
+    db.finish_sweep(sid, ok=True, summary=result, report_path=args.report if args.what == "drift" else None)
+    print(json.dumps({k: v for k, v in result.items() if k != "report"}))
     return 0
 
 

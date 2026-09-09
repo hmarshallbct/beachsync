@@ -204,6 +204,29 @@ def status_page(resume: Optional[str] = None):
     return HTMLResponse('<meta http-equiv="refresh" content="60">' + body)
 
 
+@app.get("/events", response_class=HTMLResponse)
+def events_page(status: str = "", source: str = "", limit: int = Query(200, le=1000)):
+    from app.status_page import render_events
+    alive = bool(_worker and _worker.is_alive() and _worker.worker_alive()) if settings.worker_enabled else True
+    return HTMLResponse(render_events(alive, status, source, limit))
+
+
+@app.get("/sweeps", response_class=HTMLResponse)
+def sweeps_page():
+    from app.status_page import render_sweeps
+    alive = bool(_worker and _worker.is_alive() and _worker.worker_alive()) if settings.worker_enabled else True
+    return HTMLResponse(render_sweeps(alive))
+
+
+@app.get("/sweeps/{sweep_id}/report")
+def sweep_report(sweep_id: int):
+    from fastapi.responses import FileResponse
+    sw = db.get_sweep(sweep_id)
+    if not sw or not sw.get("report_path") or not _os.path.isfile(sw["report_path"]):
+        raise HTTPException(404, "no report for this sweep")
+    return FileResponse(sw["report_path"], media_type="text/csv", filename=_os.path.basename(sw["report_path"]))
+
+
 @app.get("/status.json")
 def status_json():
     return db.dashboard()

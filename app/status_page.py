@@ -46,6 +46,100 @@ def _pill(text: str, tone: str) -> str:
     return f'<span class="bc-pill bc-pill--{tone}">{html.escape(text)}</span>'
 
 
+def _shell_open(active: str, crumb: str, service_tone: str, service_label: str) -> str:
+    e = html.escape
+    rows = [("status", "/status", "Status"), ("events", "/events", "Events"), ("sweeps", "/sweeps", "Sweeps")]
+    nav = "".join(f'<a class="bc-nav-row{" bc-nav-row--on" if k == active else ""}" href="{href}"'
+                  f'{" aria-current=page" if k == active else ""}>{label}</a>' for k, href, label in rows)
+    return ('<div class="bc-shell"><aside class="bc-sidebar">'
+            '<a class="bc-brand" href="/status"><img src="/static/logos/logo-shell-white.svg" alt="" width="26" height="31">'
+            '<span class="bc-brand-name">beachsync</span></a><div class="bc-brand-rule"></div>'
+            f'<p class="bc-kicker bc-nav-group">Sync</p>{nav}'
+            '<div class="bc-sidebar-foot"><div class="bc-sidebar-hair"></div>'
+            '<p class="bc-sidebar-user">TigerBay → HubSpot<br>Beachcomber Tours</p></div></aside>'
+            '<div class="bc-main-col"><header class="bc-band">'
+            f'<span class="bc-crumb-kicker">Sync</span><span class="bc-crumb-sep">/</span><span class="bc-crumb-title">{e(crumb)}</span>'
+            f'<div class="bc-band-right"><span class="bc-status"><span class="bc-dot bc-dot--{service_tone}"></span>'
+            f'<span class="bc-band-note">{e(service_label)}</span></span><span class="bc-band-div"></span>'
+            f'<span class="bc-band-note">{e(time.strftime("%a %d %b · %H:%M"))}</span></div></header><main class="bc-page">')
+
+
+def service_state(worker_alive: bool):
+    dry = settings.effective_dry_run()
+    paused = db.paused()
+    tone = "pass" if worker_alive and not dry else ("warn" if worker_alive else "fail")
+    label = "worker running" if worker_alive else "worker down"
+    if worker_alive and dry:
+        label = "dry run"
+    if paused:
+        tone, label = "fail", "sync paused"
+    return tone, label, dry, paused
+
+
+def render_sweeps(worker_alive: bool) -> str:
+    e = html.escape
+    tone, label, _, _ = service_state(worker_alive)
+    out = [f"<title>beachsync · sweeps</title>{LINKS}", _shell_open("sweeps", "Sweeps", tone, label),
+           '<div class="bc-page-head"><span class="bc-kicker bc-kicker--page">Safety net</span><h1 class="bc-h1">Sync rollups</h1>'
+           '<p class="bc-intro">The nightly new-id sweep queues TigerBay records whose <em>created</em> webhook never arrived. '
+           'The daily drift sweep reconciles every record against HubSpot and re-queues any that differ (missed <em>modified</em> webhooks). '
+           'Each run is listed with what it found and how the queued events turned out.</p></div>']
+    sweeps = db.list_sweeps()
+    if not sweeps:
+        out.append('<section class="bc-section"><p class="bc-empty">No sweeps have run yet. Nightly at 02:40 (new ids) and daily at 04:00 (drift).</p></section>')
+    for sw in sweeps:
+        sm = sw.get("summary") or {}
+        dur = f'{int((sw["finished_at"] or time.time()) - sw["started_at"]) // 60}m {int((sw["finished_at"] or time.time()) - sw["started_at"]) % 60}s'
+        if sw["ok"] is None:
+            state = _dot_word("warn", "running")
+        elif sw["ok"]:
+            state = _dot_word("pass", "completed")
+        else:
+            state = _dot_word("fail", "failed")
+        kind = "New-id sweep" if sw["kind"] == "new-ids" else "Drift sweep"
+        out.append(f'<section class="bc-section"><div class="bc-section-head"><h2 class="bc-h2">{kind}</h2>'
+                   f'<span class="bc-meta">{e(_t(sw["started_at"]))} · {dur} · #{sw["id"]}</span></div>')
+        cells = [("Run", state)]
+        if sw["kind"] == "new-ids" and sm:
+            cq, sq = sm.get("customers", {}).get("queued", []), sm.get("staff", {}).get("queued", [])
+            cells += [("Customers found", f'<span class="bc-fig">{len(cq)}</span>'),
+                      ("Staff found", f'<span class="bc-fig">{len(sq)}</span>'),
+                      ("Scanned from", f'customer {sm.get("customers", {}).get("from")} · staff {sm.get("staff", {}).get("from")}')]
+        elif sw["kind"] == "drift" and sm:
+            rep = sm.get("report") or {}
+            cells += [("Customers re-queued", f'<span class="bc-fig">{sm.get("customer", 0)}</span>'),
+                      ("Staff re-queued", f'<span class="bc-fig">{sm.get("agent", 0)}</span>'),
+                      ("Checked", f'customers {rep.get("customers", {}).get("checked", "?")} · staff {rep.get("staff", {}).get("checked", "?")}')]
+        elif sw["error"]:
+            cells += [("Error", f"<code>{e(sw['error'][:200])}</code>")]
+        out.append('<div class="bc-statband bc-statband--inline">' + "".join(
+            f'<div class="bc-statcell"><span>{k}</span><strong>{v}</strong></div>' for k, v in cells) + "</div>")
+        if sw.get("outcomes"):
+            oc = sw["outcomes"]
+            out.append('<table class="bc-grid"><tr>' + "".join(f"<th>{e(_action(k))}</th>" for k in sorted(oc)) + "</tr><tr>"
+                       + "".join(f'<td class="num" style="text-align:left">{oc[k]}</td>' for k in sorted(oc)) + "</tr></table>")
+        if sw["kind"] == "drift" and sm.get("report", {}).get("field_diff_counts"):
+            fd = sm["report"]["field_diff_counts"]
+            top = sorted(fd.items(), key=lambda kv: -kv[1])[:12]
+            out.append('<p class="bc-meta" style="margin:14px 0 6px">Fields that differed (top 12)</p><table class="bc-grid"><tr>'
+                       + "".join(f"<th>{e(k)}</th>" for k, _ in top) + "</tr><tr>"
+                       + "".join(f'<td class="num" style="text-align:left">{n}</td>' for _, n in top) + "</tr></table>")
+        ids = (sm.get("customers", {}).get("queued") if sw["kind"] == "new-ids" else None)
+        if ids:
+            out.append(f'<p class="bc-meta" style="margin-top:12px">Customer ids: {e(", ".join(map(str, ids[:60])))}'
+                       + (" …" if len(ids) > 60 else "") + "</p>")
+        if sw["kind"] == "new-ids" and sm.get("staff", {}).get("queued"):
+            sids = sm["staff"]["queued"]
+            out.append(f'<p class="bc-meta">Staff ids: {e(", ".join(map(str, sids[:60])))}' + (" …" if len(sids) > 60 else "") + "</p>")
+        if sw["kind"] == "drift" and sw["report_path"] and sw["ok"]:
+            out.append(f'<p class="bc-meta" style="margin-top:12px"><a class="bc-link" href="/sweeps/{sw["id"]}/report">Download the diff CSV</a> '
+                       '(contains names and emails; LAN only)</p>')
+        out.append("</section>")
+    out.append('<div class="bc-foot"><span class="bc-meta">beachsync · Beachcomber Tours</span>'
+               '<img src="/static/logos/logo-wordmark-navy.svg" alt="Beachcomber Tours"></div></main></div></div>')
+    return "".join(out)
+
+
 def render(worker_alive: bool, worker_tick: float, resume_denied: bool = False) -> str:
     d = db.dashboard()
     c = d["counts"]
@@ -58,20 +152,7 @@ def render(worker_alive: bool, worker_tick: float, resume_denied: bool = False) 
         service_label = "dry run"
     if paused:
         service_tone, service_label = "fail", "sync paused"
-    out = [f"<title>beachsync · status</title>{LINKS}",
-           '<div class="bc-shell"><aside class="bc-sidebar">'
-           '<a class="bc-brand" href="/status"><img src="/static/logos/logo-shell-white.svg" alt="" width="26" height="31">'
-           '<span class="bc-brand-name">beachsync</span></a><div class="bc-brand-rule"></div>'
-           '<p class="bc-kicker bc-nav-group">Sync</p>'
-           '<a class="bc-nav-row bc-nav-row--on" href="/status" aria-current="page">Status</a>'
-           '<div class="bc-sidebar-foot"><div class="bc-sidebar-hair"></div>'
-           '<p class="bc-sidebar-user">TigerBay → HubSpot<br>Beachcomber Tours</p></div></aside>',
-           '<div class="bc-main-col"><header class="bc-band">'
-           '<span class="bc-crumb-kicker">Sync</span><span class="bc-crumb-sep">/</span><span class="bc-crumb-title">Status</span>'
-           f'<div class="bc-band-right"><span class="bc-status"><span class="bc-dot bc-dot--{service_tone}"></span>'
-           f'<span class="bc-band-note">{e(service_label)}</span></span><span class="bc-band-div"></span>'
-           f'<span class="bc-band-note">{e(time.strftime("%a %d %b · %H:%M"))}</span></div></header>',
-           '<main class="bc-page">',
+    out = [f"<title>beachsync · status</title>{LINKS}", _shell_open("status", "Status", service_tone, service_label),
            '<div class="bc-page-head"><span class="bc-kicker bc-kicker--page">Profile sync</span><h1 class="bc-h1">TigerBay → HubSpot</h1>'
            '<p class="bc-intro">Customer and agent-staff profiles, kept in step by TigerBay webhooks with a nightly new-id sweep and a daily drift repair. Refreshes every minute.</p></div>']
 
@@ -141,35 +222,68 @@ def render(worker_alive: bool, worker_tick: float, resume_denied: bool = False) 
         out.append('<p class="bc-empty">Nothing failed or unparsed.</p>')
     out.append("</section>")
 
-    out.append('<section class="bc-section"><div class="bc-section-head"><h2 class="bc-h2">Recent events</h2><span class="bc-meta">latest 40</span></div>'
-               '<table class="bc-grid"><tr><th>#</th><th>Received</th><th>Source</th><th>Entity</th><th>Event</th><th>Id</th><th>Status</th><th>Result</th></tr>')
-    for r in d["recent"]:
-        res = ""
-        if r["result"]:
-            try:
-                j = json.loads(r["result"])
-            except ValueError:
-                j = None
-            if j:
-                res = _action(j.get("action", ""))
-                if j.get("changed"):
-                    res += ": " + ", ".join(j["changed"][:8]) + ("…" if len(j["changed"]) > 8 else "")
-                if j.get("staff_queued") is not None:
-                    res += f" (queued {j['staff_queued']} staff)"
-                if j.get("note"):
-                    res += f" — {j['note']}"
-                if j.get("superseded_by"):
-                    res = f"superseded by #{j['superseded_by']}"
-            else:
-                res = r["result"][:120]
-        elif r["last_error"]:
-            res = r["last_error"]
-        out.append(f'<tr><td class="mute">{r["id"]}</td><td class="when">{_t(r["received_at"])}</td><td>{e(r["source"])}</td><td>{e(r["entity"])}</td>'
-                   f'<td>{e(r["event"])}</td><td>{r["entity_id"] or ""}</td><td>{_dot(r["status"])}</td><td class="mute">{e(res)}</td></tr>')
-    out.append("</table></section>")
+    out.append('<section class="bc-section"><p class="bc-meta"><a class="bc-link" href="/events">All recent events →</a></p></section>')
     out.append('<div class="bc-foot"><span class="bc-meta">beachsync · Beachcomber Tours</span>'
                '<img src="/static/logos/logo-wordmark-navy.svg" alt="Beachcomber Tours"></div>')
     out.append("</main></div></div>")
+    return "".join(out)
+
+
+def _result_text(r: dict) -> str:
+    res = ""
+    if r["result"]:
+        try:
+            j = json.loads(r["result"])
+        except ValueError:
+            j = None
+        if j:
+            res = _action(j.get("action", ""))
+            if j.get("changed"):
+                res += ": " + ", ".join(j["changed"][:8]) + ("…" if len(j["changed"]) > 8 else "")
+            if j.get("staff_queued") is not None:
+                res += f" (queued {j['staff_queued']} staff)"
+            if j.get("note"):
+                res += f" — {j['note']}"
+            if j.get("superseded_by"):
+                res = f"superseded by #{j['superseded_by']}"
+        else:
+            res = r["result"][:120]
+    elif r["last_error"]:
+        res = r["last_error"]
+    return res
+
+
+def _event_rows(rows: list[dict]) -> str:
+    e = html.escape
+    out = ['<table class="bc-grid"><tr><th>#</th><th>Received</th><th>Source</th><th>Entity</th><th>Event</th><th>Id</th><th>Status</th><th>Result</th></tr>']
+    for r in rows:
+        out.append(f'<tr><td class="mute">{r["id"]}</td><td class="when">{_t(r["received_at"])}</td><td>{e(r["source"])}</td><td>{e(r["entity"])}</td>'
+                   f'<td>{e(r["event"])}</td><td>{r["entity_id"] or ""}</td><td>{_dot(r["status"])}</td><td class="mute">{e(_result_text(r))}</td></tr>')
+    out.append("</table>")
+    return "".join(out)
+
+
+STATUSES = ["pending", "processing", "done", "skipped", "failed", "unparsed", "superseded", "dismissed"]
+SOURCES = ["webhook", "fanout", "sweep", "backfill", "replay"]
+
+
+def render_events(worker_alive: bool, status: str = "", source: str = "", limit: int = 200) -> str:
+    e = html.escape
+    tone, label, _, _ = service_state(worker_alive)
+    rows = db.recent_events(limit, status or None, source or None)
+    out = [f"<title>beachsync · events</title>{LINKS}", _shell_open("events", "Events", tone, label),
+           '<div class="bc-page-head"><span class="bc-kicker bc-kicker--page">Queue</span><h1 class="bc-h1">Events</h1>'
+           '<p class="bc-intro">Every webhook, fan-out child, sweep and manual replay, newest first. '
+           'Ids are TigerBay ids; the result column says what was written to HubSpot.</p></div>',
+           '<section class="bc-section"><form method="get" action="/events" class="bc-filter">'
+           '<label class="bc-kicker">Status</label><select class="bc-input bc-select" name="status" onchange="this.form.submit()"><option value="">all</option>'
+           + "".join(f'<option value="{s_}"{" selected" if s_ == status else ""}>{s_}</option>' for s_ in STATUSES)
+           + '</select><label class="bc-kicker">Source</label><select class="bc-input bc-select" name="source" onchange="this.form.submit()"><option value="">all</option>'
+           + "".join(f'<option value="{s_}"{" selected" if s_ == source else ""}>{s_}</option>' for s_ in SOURCES)
+           + f'</select><span class="bc-meta">showing {len(rows)} of up to {limit}</span></form>']
+    out.append(_event_rows(rows) if rows else '<p class="bc-empty">No events match.</p>')
+    out.append('</section><div class="bc-foot"><span class="bc-meta">beachsync · Beachcomber Tours</span>'
+               '<img src="/static/logos/logo-wordmark-navy.svg" alt="Beachcomber Tours"></div></main></div></div>')
     return "".join(out)
 
 

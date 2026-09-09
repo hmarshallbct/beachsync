@@ -70,7 +70,11 @@ def test_admin_dismiss(client):
 def test_status_page(client):
     client.post("/webhooks/tigerbay/customer/created", json={"Id": 22926}, headers=basic())
     r = client.get("/status")
-    assert r.status_code == 200 and "beachsync" in r.text and "22926" in r.text
+    assert r.status_code == 200 and "beachsync" in r.text and "22926" not in r.text   # events moved to /events
+    ev = client.get("/events").text
+    assert "22926" in ev and "pending" in ev
+    assert "22926" not in client.get("/events?status=done").text
+    assert "22926" in client.get("/events?source=webhook").text
     assert client.get("/status.json").json()["counts"]["pending"] == 1
 
 

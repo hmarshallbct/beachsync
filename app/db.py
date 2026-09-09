@@ -43,6 +43,17 @@ CREATE TABLE IF NOT EXISTS flags (
     updated_at REAL NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS sweeps (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind        TEXT NOT NULL,            -- new-ids | drift
+    started_at  REAL NOT NULL,
+    finished_at REAL,
+    ok          INTEGER,
+    summary     TEXT,                     -- JSON
+    report_path TEXT,
+    error       TEXT
+);
+
 CREATE TABLE IF NOT EXISTS hubspot_map (
     entity        TEXT    NOT NULL,           -- customer | staff | agent
     tigerbay_id   INTEGER NOT NULL,
@@ -274,6 +285,71 @@ def dashboard() -> dict:
                 "counts": counts()}
     finally:
         conn.close()
+
+
+# --- sweeps ---------------------------------------------------------------------
+
+def start_sweep(kind: str) -> int:
+    with tx() as conn:
+        return int(conn.execute("INSERT INTO sweeps (kind, started_at) VALUES (?,?)", (kind, time.time())).lastrowid)
+
+
+def finish_sweep(sweep_id: int, ok: bool, summary: Any = None, report_path: Optional[str] = None,
+                 error: Optional[str] = None) -> None:
+    with tx() as conn:
+        conn.execute("UPDATE sweeps SET finished_at=?, ok=?, summary=?, report_path=?, error=? WHERE id=?",
+                     (time.time(), 1 if ok else 0, json.dumps(summary) if summary is not None else None,
+                      report_path, error, sweep_id))
+
+
+def list_sweeps(limit: int = 60) -> list[dict]:
+    conn = connect()
+    try:
+        rows = conn.execute("SELECT * FROM sweeps ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+        out = []
+        for r in rows:
+            d = dict(r)
+            try:
+                d["summary"] = json.loads(d["summary"]) if d["summary"] else None
+            except ValueError:
+                pass
+            # outcomes of the events this sweep queued
+            if d["finished_at"]:
+                acts = conn.execute(
+                    "SELECT json_extract(result,'$.action') AS a, status, COUNT(*) AS n FROM events"
+                    " WHERE source='sweep' AND received_at BETWEEN ? AND ? GROUP BY a, status",
+                    (d["started_at"], d["finished_at"] + 1)).fetchall()
+                d["outcomes"] = {(x["a"] or x["status"]): x["n"] for x in acts}
+            else:
+                d["outcomes"] = {}
+            out.append(d)
+        return out
+    finally:
+        conn.close()
+
+
+def recent_events(limit: int = 200, status: Optional[str] = None, source: Optional[str] = None) -> list[dict]:
+    conn = connect()
+    try:
+        where, args = [], []
+        if status:
+            where.append("status=?"); args.append(status)
+        if source:
+            where.append("source=?"); args.append(source)
+        sql = ("SELECT id, received_at, processed_at, source, entity, event, entity_id, status, attempts,"
+               " coalesce(result,'') AS result, substr(coalesce(last_error,''),1,200) AS last_error FROM events"
+               + (" WHERE " + " AND ".join(where) if where else "") + " ORDER BY id DESC LIMIT ?")
+        args.append(limit)
+        return [dict(r) for r in conn.execute(sql, args).fetchall()]
+    finally:
+        conn.close()
+
+
+def get_sweep(sweep_id: int) -> Optional[dict]:
+    for s in list_sweeps(10000):
+        if s["id"] == sweep_id:
+            return s
+    return None
 
 
 # --- flags (kill switch) ------------------------------------------------------
