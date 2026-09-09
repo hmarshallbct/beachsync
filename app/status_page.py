@@ -57,7 +57,7 @@ def _shell_open(active: str, crumb: str, service_tone: str, service_label: str) 
             f'<p class="bc-kicker bc-nav-group">Sync</p>{nav}'
             '</aside>'
             '<div class="bc-main-col"><header class="bc-band">'
-            f'<span class="bc-crumb-kicker">Sync</span><span class="bc-crumb-sep">/</span><span class="bc-crumb-title">{e(crumb)}</span>'
+            f'<span class="bc-crumb-kicker">Beachsync</span><span class="bc-crumb-sep">/</span><span class="bc-crumb-title">{e(crumb)}</span>'
             f'<div class="bc-band-right"><span class="bc-status"><span class="bc-dot bc-dot--{service_tone}"></span>'
             f'<span class="bc-band-note">{e(service_label)}</span></span><span class="bc-band-div"></span>'
             f'<span class="bc-band-note">{e(time.strftime("%a %d %b · %H:%M"))}</span></div></header><main class="bc-page">')
