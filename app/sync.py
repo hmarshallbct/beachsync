@@ -26,7 +26,8 @@ class SharedEmail(Exception):
 
 class SyncContext:
     def __init__(self, tb: Optional[TigerBayClient] = None, hs: Optional[HubSpotClient] = None,
-                 dry_run: Optional[bool] = None, preserve_email: bool = False):
+                 dry_run: Optional[bool] = None, preserve_email: bool = False,
+                 fanout_parent: Optional[int] = None, inline_fanout: bool = False):
         from app import hubspot, tigerbay
         self.tb = tb or tigerbay.client()
         self.hs = hs or hubspot.client()
@@ -35,6 +36,11 @@ class SyncContext:
         # today onwards updates the HubSpot email; a backfill/reconciliation of existing
         # records leaves a differing HubSpot email alone (fills it only when empty).
         self.preserve_email = preserve_email
+        # Agency events fan out to every staff member. In the worker this is done by
+        # queueing one child event per staff member (so a 1,700-staff agency does not
+        # block the queue for minutes); reconcile/preview keep it inline.
+        self.fanout_parent = fanout_parent
+        self.inline_fanout = inline_fanout
 
 
 def _today() -> str:
@@ -285,16 +291,20 @@ def sync_agent(agent_id: int, event: str = "modified", ctx: Optional[SyncContext
         out = {"entity": "agent", "tigerbay_id": agent_id, "action": "noop",
                "note": "agency record; companies not synced (SYNC_AGENT_COMPANIES=false)"}
     # event is passed through: an agency 'archived' archives every staff contact.
-    staff_results = []
-    for st in ctx.tb.agent_staff(agent_id):
-        try:
-            sp = ctx.tb.agent_profile(int(st["Id"]))
-            staff_results.append(sync_staff(sp, ctx, event))
-        except (NotFound, HubSpotError) as exc:
-            staff_results.append({"tigerbay_id": st.get("Id"), "action": "error", "error": str(exc)})
-    out["staff"] = staff_results
-    out["staff_summary"] = {a: sum(1 for r in staff_results if r.get("action") == a)
-                            for a in sorted({r.get("action") for r in staff_results})}
+    staff_ids = [int(st["Id"]) for st in ctx.tb.agent_staff(agent_id)]
+    if ctx.inline_fanout or ctx.dry_run:
+        staff_results = []
+        for sid in staff_ids:
+            try:
+                staff_results.append(sync_staff(ctx.tb.agent_profile(sid), ctx, event))
+            except (NotFound, HubSpotError) as exc:
+                staff_results.append({"tigerbay_id": sid, "action": "error", "error": str(exc)})
+        out["staff"] = staff_results
+        out["staff_summary"] = {a: sum(1 for r in staff_results if r.get("action") == a)
+                                for a in sorted({r.get("action") for r in staff_results})}
+    else:
+        db.enqueue_many("agent", event, staff_ids, source="fanout", parent_event_id=ctx.fanout_parent)
+        out["staff_queued"] = len(staff_ids)
     if event == "archived" or rec.get("IsArchived") is True:
         # Staff TigerBay no longer lists under the agency (or never gave us) still get flagged.
         out["agency_staff"] = _archive_agency_staff_in_hubspot(ctx, agent_id)

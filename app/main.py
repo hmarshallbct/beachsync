@@ -216,6 +216,12 @@ def admin_retry(event_id: int):
     return {"ok": True}
 
 
+@app.post("/admin/events/retry-failed", dependencies=[Depends(require_admin)])
+def admin_retry_failed():
+    """Re-queue every failed event (after an outage)."""
+    return {"requeued": db.retry_failed()}
+
+
 @app.post("/admin/events/{event_id}/dismiss", dependencies=[Depends(require_admin)])
 def admin_dismiss(event_id: int):
     """Acknowledge a failed/unparsed event so it stops counting in the health check."""

@@ -31,7 +31,8 @@ CREATE TABLE IF NOT EXISTS events (
     next_attempt_at REAL  NOT NULL DEFAULT 0,
     last_error    TEXT,
     result        TEXT,
-    processed_at  REAL
+    processed_at  REAL,
+    parent_event_id INTEGER
 );
 CREATE INDEX IF NOT EXISTS ix_events_status_next ON events(status, next_attempt_at);
 CREATE INDEX IF NOT EXISTS ix_events_entity ON events(entity, entity_id);
@@ -60,6 +61,9 @@ def connect(path: Optional[str] = None) -> sqlite3.Connection:
         with _init_lock:
             if path not in _initialised:
                 conn.executescript(SCHEMA)
+                cols = {r[1] for r in conn.execute("PRAGMA table_info(events)").fetchall()}
+                if "parent_event_id" not in cols:
+                    conn.execute("ALTER TABLE events ADD COLUMN parent_event_id INTEGER")
                 _initialised.add(path)
     return conn
 
@@ -81,16 +85,64 @@ def tx(path: Optional[str] = None) -> Iterator[sqlite3.Connection]:
 # --- events ---------------------------------------------------------------
 
 def enqueue_event(entity: str, event: str, entity_id: Optional[int], raw_body: str = "",
-                  headers: Optional[dict] = None, source: str = "webhook") -> int:
+                  headers: Optional[dict] = None, source: str = "webhook",
+                  parent_event_id: Optional[int] = None) -> int:
     status = "pending" if entity_id is not None else "unparsed"
     with tx() as conn:
         cur = conn.execute(
-            "INSERT INTO events (received_at, entity, event, entity_id, source, raw_body, headers, status)"
-            " VALUES (?,?,?,?,?,?,?,?)",
+            "INSERT INTO events (received_at, entity, event, entity_id, source, raw_body, headers, status,"
+            " parent_event_id) VALUES (?,?,?,?,?,?,?,?,?)",
             (time.time(), entity, event, entity_id, source, raw_body,
-             json.dumps(headers or {}), status),
+             json.dumps(headers or {}), status, parent_event_id),
         )
         return int(cur.lastrowid)
+
+
+def enqueue_many(entity: str, event: str, ids: list[int], source: str, parent_event_id: Optional[int] = None) -> int:
+    now = time.time()
+    with tx() as conn:
+        conn.executemany(
+            "INSERT INTO events (received_at, entity, event, entity_id, source, raw_body, headers, status,"
+            " parent_event_id) VALUES (?,?,?,?,?,'','{}','pending',?)",
+            [(now, entity, event, int(i), source, parent_event_id) for i in ids],
+        )
+    return len(ids)
+
+
+def supersede_duplicates(entity: str, entity_id: int, before: float, done_event_id: int) -> int:
+    """After an event for (entity, id) has been processed against the CURRENT TigerBay
+    state, any other pending event for the same record that was received before we
+    started is redundant (TigerBay fires every event twice; a burst of edits collapses
+    to one sync). An 'archived' event is never superseded by a 'modified' one."""
+    with tx() as conn:
+        cur = conn.execute(
+            "UPDATE events SET status='superseded', processed_at=?, result=? WHERE status='pending'"
+            " AND entity=? AND entity_id=? AND received_at<=? AND id<>? AND event<>'archived'",
+            (time.time(), json.dumps({"superseded_by": done_event_id}), entity, entity_id, before, done_event_id),
+        )
+        return cur.rowcount
+
+
+def retry_failed(limit: int = 10000) -> int:
+    with tx() as conn:
+        cur = conn.execute(
+            "UPDATE events SET status='pending', next_attempt_at=0, attempts=0 WHERE id IN"
+            " (SELECT id FROM events WHERE status='failed' ORDER BY id LIMIT ?)", (limit,))
+        return cur.rowcount
+
+
+def max_seen_id(entity: str) -> int:
+    """Highest TigerBay id this service has ever handled for an entity (events + id map)."""
+    conn = connect()
+    try:
+        a = conn.execute("SELECT MAX(entity_id) FROM events WHERE entity=?", (entity,)).fetchone()[0] or 0
+        ents = ("customer",) if entity == "customer" else ("staff", "agent")
+        b = conn.execute(
+            f"SELECT MAX(tigerbay_id) FROM hubspot_map WHERE entity IN ({','.join('?' * len(ents))})", ents
+        ).fetchone()[0] or 0
+        return max(int(a), int(b))
+    finally:
+        conn.close()
 
 
 def claim_next_event() -> Optional[dict]:

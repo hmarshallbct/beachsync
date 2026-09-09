@@ -140,6 +140,7 @@ Only `/webhooks/*` and `/health` are exposed through the proxy; `/admin/*` is re
 | `GET /admin/events?status=failed&limit=50` | queue inspection (`pending, processing, done, failed, skipped, unparsed`) |
 | `GET /admin/events/{id}` | one event incl. raw webhook body and sync result |
 | `POST /admin/events/{id}/retry` | re-queue a failed/done event |
+| `POST /admin/events/retry-failed` | re-queue every failed event (after an outage) |
 | `POST /admin/events/{id}/dismiss` | acknowledge a failed/unparsed event (stops it alerting) |
 | `POST /admin/sync/{customer|agent}/{tigerbayId}` | queue a manual sync |
 | `GET /admin/preview/{customer|agent}/{tigerbayId}` | dry-run one record now and return the diff |
@@ -186,6 +187,28 @@ The suite uses in-memory fakes of both APIs with the real payload shapes.
   `data/beachsync.db` into `backups/`, gzipped, 30 days kept. Restore = stop the
   container, gunzip over `data/beachsync.db` (delete any `-wal`/`-shm` sidecars
   first), start.
+
+## Missed-webhook safety net
+
+- `bin/sweep_new_ids.sh` (cron, nightly 02:40): finds TigerBay customers and
+  staff with ids above the highest this service has seen and queues them as
+  `created` (source `sweep`).
+- `bin/sweep_drift.sh` (cron, Sundays 04:00): runs the full reconciliation and
+  queues every matched record with an actionable difference as `modified`
+  (source `sweep`, so an existing HubSpot email is kept). Records with no
+  HubSpot match are not created by the sweep.
+
+## Queue behaviour
+
+- **Fan-out.** An event for an agency id queues one child event per staff
+  member (`source=fanout`, `parent_event_id` set) instead of syncing them
+  inline, so a large agency never blocks webhook traffic.
+- **Duplicates.** TigerBay delivers every event twice. Once an event is
+  processed, older pending events for the same record are marked
+  `superseded` (never an `archived` event).
+- **Retries.** Transient failures back off 15 s → 1 h for up to `MAX_ATTEMPTS`
+  (30, roughly a day) before an event is `failed`. After a longer outage,
+  `POST /admin/events/retry-failed` re-queues them all.
 
 ## Operational notes
 

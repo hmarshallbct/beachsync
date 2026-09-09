@@ -94,7 +94,7 @@ class Settings:
     db_path: str = field(default_factory=lambda: _read("DB_PATH", "./data/beachsync.db"))
     worker_enabled: bool = field(default_factory=lambda: _bool("WORKER_ENABLED", True))
     worker_poll_seconds: float = field(default_factory=lambda: _float("WORKER_POLL_SECONDS", 2.0))
-    max_attempts: int = field(default_factory=lambda: _int("MAX_ATTEMPTS", 8))
+    max_attempts: int = field(default_factory=lambda: _int("MAX_ATTEMPTS", 30))
     log_level: str = field(default_factory=lambda: _read("LOG_LEVEL", "INFO").upper())
 
     def webhook_auth_configured(self) -> bool:

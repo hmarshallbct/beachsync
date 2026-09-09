@@ -212,4 +212,4 @@ def hs():
 @pytest.fixture
 def ctx(tb, hs):
     from app.sync import SyncContext
-    return SyncContext(tb=tb, hs=hs, dry_run=False)
+    return SyncContext(tb=tb, hs=hs, dry_run=False, inline_fanout=True)

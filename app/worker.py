@@ -19,8 +19,11 @@ def backoff(attempt: int) -> float:
 
 def process_one(ev: dict, ctx: Optional[SyncContext] = None) -> str:
     """Process a claimed event row. Returns the final status."""
-    if ctx is None and ev.get("source") == "backfill":
-        ctx = SyncContext(preserve_email=True)
+    started = time.time()
+    if ctx is None:
+        ctx = SyncContext(preserve_email=ev.get("source") in ("backfill", "sweep"), fanout_parent=ev["id"])
+    else:
+        ctx.fanout_parent = ev["id"]
     try:
         result = sync_event(ev["entity"], int(ev["entity_id"]), ev["event"], ctx)
     except (TigerBayError, HubSpotError) as exc:
@@ -42,6 +45,9 @@ def process_one(ev: dict, ctx: Optional[SyncContext] = None) -> str:
         return "failed"
     status = "skipped" if result.get("action") == "skipped" else "done"
     db.finish_event(ev["id"], status, result=result)
+    n = db.supersede_duplicates(ev["entity"], int(ev["entity_id"]), started, ev["id"])
+    if n:
+        log.info("event %s superseded %s duplicate pending event(s) for %s %s", ev["id"], n, ev["entity"], ev["entity_id"])
     log.info("event %s %s: %s %s -> %s (%s)", ev["id"], status, ev["entity"], ev["entity_id"],
              result.get("action"), ",".join(result.get("changed") or []) or "-")
     return status
