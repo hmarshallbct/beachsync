@@ -48,3 +48,15 @@ def test_skipped_status(tb, hs, ctx):
     db.enqueue_event("customer", "modified", 999)
     drain(ctx)
     assert db.list_events()[0]["status"] == "skipped"
+
+
+def test_supervisor_restarts_dead_worker(monkeypatch):
+    from app.worker import Supervisor, Worker
+    sup = Supervisor()
+    sup.worker = Worker()          # never started => is_alive() False, like a crashed thread
+    started = []
+    monkeypatch.setattr(Worker, "start", lambda self: started.append(self))
+    monkeypatch.setattr(sup._stop, "wait", lambda t: len(started) >= 2)   # stop after one restart
+    sup.run()
+    assert len(started) == 2       # initial start + one restart
+    assert sup.restarts and sup.worker is started[-1]

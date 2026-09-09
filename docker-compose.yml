@@ -11,6 +11,12 @@ services:
     build: .
     container_name: beachsync
     restart: unless-stopped
+    # Docker's json-file log driver grows without bound by default.
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
     env_file: .env
     environment:
       TZ: Europe/London
@@ -33,7 +39,9 @@ services:
     expose:
       - "8080"
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if b'\\\"status\\\": \\\"ok\\\"' in urllib.request.urlopen('http://localhost:8080/health', timeout=3).read() else 1)\" || exit 1"]
+      # ok only when the API answers AND the worker thread is alive (the supervisor
+      # exits the process if the worker keeps dying, so restart: unless-stopped applies).
+      test: ["CMD-SHELL", "python -c \"import urllib.request,json,sys; d=json.load(urllib.request.urlopen('http://localhost:8080/health', timeout=3)); sys.exit(0 if d.get('status')=='ok' and d.get('worker_alive') else 1)\" || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3

@@ -54,8 +54,8 @@ async def lifespan(app: FastAPI):
             _schema_bootstrap.update(done=False, error=str(exc))
             log.error("HubSpot schema bootstrap failed: %s", exc)
     if settings.worker_enabled:
-        from app.worker import Worker
-        _worker = Worker()
+        from app.worker import Supervisor
+        _worker = Supervisor()
         _worker.start()
     yield
     if _worker:
@@ -180,7 +180,7 @@ async def webhook_probe(rest: str):
 @app.get("/health")
 def health():
     c = db.counts()
-    worker_ok = bool(_worker and _worker.is_alive()) if settings.worker_enabled else True
+    worker_ok = bool(_worker and _worker.is_alive() and _worker.worker_alive()) if settings.worker_enabled else True
     return {"status": "ok" if worker_ok else "degraded", "worker_alive": worker_ok,
             "worker_last_tick": _worker.last_tick if _worker else None, "queue": c,
             "dry_run": settings.effective_dry_run(), "dry_run_forced_by_nonprod_tigerbay":

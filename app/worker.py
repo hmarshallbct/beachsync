@@ -58,6 +58,49 @@ def drain(ctx: Optional[SyncContext] = None, max_events: Optional[int] = None) -
     return n
 
 
+class Supervisor(threading.Thread):
+    """Keeps a Worker alive. A crashed worker is restarted; if it keeps dying
+    (more than ``max_restarts`` in ``window`` seconds) the whole process exits
+    non-zero so Docker's restart policy brings up a clean container. Without this
+    a dead thread would leave the container "up" while nothing syncs."""
+
+    def __init__(self, ctx: Optional[SyncContext] = None, max_restarts: int = 5, window: float = 600.0):
+        super().__init__(name="beachsync-supervisor", daemon=True)
+        self._ctx = ctx
+        self._stop = threading.Event()
+        self.max_restarts, self.window = max_restarts, window
+        self.restarts: list[float] = []
+        self.worker = Worker(ctx)
+
+    @property
+    def last_tick(self) -> float:
+        return self.worker.last_tick
+
+    def worker_alive(self) -> bool:
+        return self.worker.is_alive()
+
+    def stop(self) -> None:
+        self._stop.set()
+        self.worker.stop()
+
+    def run(self) -> None:
+        self.worker.start()
+        while not self._stop.wait(5):
+            if self.worker.is_alive():
+                continue
+            now = time.time()
+            self.restarts = [t for t in self.restarts if now - t < self.window]
+            if len(self.restarts) >= self.max_restarts:
+                log.critical("worker died %s times in %.0fs; exiting so the container restarts",
+                             len(self.restarts), self.window)
+                import os
+                os._exit(3)
+            self.restarts.append(now)
+            log.error("worker thread died; restarting (%s/%s in window)", len(self.restarts), self.max_restarts)
+            self.worker = Worker(self._ctx)
+            self.worker.start()
+
+
 class Worker(threading.Thread):
     def __init__(self, ctx: Optional[SyncContext] = None):
         super().__init__(name="beachsync-worker", daemon=True)
