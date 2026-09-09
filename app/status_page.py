@@ -28,6 +28,15 @@ def _t(ts):
     return time.strftime("%d %b %H:%M:%S", time.localtime(ts)) if ts else ""
 
 
+# Display names for internal action codes.
+ACTION_LABELS = {"noop": "no change", "create": "created", "update": "updated", "skipped": "skipped",
+                 "archive": "archived", "update-after-conflict": "updated (existing email)", "error": "error"}
+
+
+def _action(a) -> str:
+    return ACTION_LABELS.get(str(a), str(a))
+
+
 def _dot(status: str) -> str:
     tone = {"done": "pass", "failed": "fail", "unparsed": "fail", "pending": "warn", "processing": "warn"}.get(status, "idle")
     return f'<span class="bc-status"><span class="bc-dot bc-dot--{tone}"></span><span class="bc-status-label">{html.escape(status)}</span></span>'
@@ -102,7 +111,7 @@ def render(worker_alive: bool, worker_tick: float, resume_denied: bool = False) 
     a = d["actions_7d"]
     if a:
         out.append('<section class="bc-section"><div class="bc-section-head"><h2 class="bc-h2">Outcomes</h2><span class="bc-meta">last 7 days</span></div>'
-                   '<table class="bc-grid"><tr>' + "".join(f"<th>{e(k)}</th>" for k in sorted(a)) + "</tr><tr>"
+                   '<table class="bc-grid"><tr>' + "".join(f"<th>{e(_action(k))}</th>" for k in sorted(a)) + "</tr><tr>"
                    + "".join(f'<td class="num" style="text-align:left">{a[k]}</td>' for k in sorted(a)) + "</tr></table></section>")
 
     per_day: dict = defaultdict(lambda: defaultdict(int))
@@ -142,7 +151,7 @@ def render(worker_alive: bool, worker_tick: float, resume_denied: bool = False) 
             except ValueError:
                 j = None
             if j:
-                res = j.get("action", "")
+                res = _action(j.get("action", ""))
                 if j.get("changed"):
                     res += ": " + ", ".join(j["changed"][:8]) + ("…" if len(j["changed"]) > 8 else "")
                 if j.get("staff_queued") is not None:
