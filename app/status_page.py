@@ -221,7 +221,6 @@ def render(worker_alive: bool, worker_tick: float, resume_denied: bool = False) 
         out.append('<p class="bc-empty">Nothing failed or unparsed.</p>')
     out.append("</section>")
 
-    out.append('<section class="bc-section"><p class="bc-meta"><a class="bc-link" href="/events">All recent events →</a></p></section>')
     out.append('<div class="bc-foot"><span class="bc-meta">beachsync · Beachcomber Tours</span>'
                '<img src="/static/logos/logo-wordmark-navy.svg" alt="Beachcomber Tours"></div>')
     out.append("</main></div></div>")
