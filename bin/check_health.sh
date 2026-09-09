@@ -13,7 +13,7 @@ DIR=/home/bctadmin/beachsync
 LOG=$DIR/logs/check_health.log
 STATE=$DIR/logs/check_health.state
 mkdir -p "$DIR/logs"
-WEBHOOK_URL="$(cat /home/bctadmin/beachstats/.alert_webhook 2>/dev/null || true)"
+WEBHOOK_URL="$(cat /home/bctadmin/beachsync/.alert_webhook 2>/dev/null || cat /home/bctadmin/beachstats/.alert_webhook 2>/dev/null || true)"
 
 notify() {
     echo "$(date -Is) ALERT: $1" >> "$LOG"

@@ -5,7 +5,7 @@
 set -u
 cd /home/bctadmin/beachsync
 
-WEBHOOK_URL="$(cat /home/bctadmin/beachstats/.alert_webhook 2>/dev/null || true)"
+WEBHOOK_URL="$(cat /home/bctadmin/beachsync/.alert_webhook 2>/dev/null || cat /home/bctadmin/beachstats/.alert_webhook 2>/dev/null || true)"
 notify() {
     [ -n "$WEBHOOK_URL" ] || return 0
     case "$WEBHOOK_URL" in
