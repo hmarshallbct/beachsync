@@ -48,7 +48,7 @@ def _pill(text: str, tone: str) -> str:
 
 def _shell_open(active: str, crumb: str, service_tone: str, service_label: str) -> str:
     e = html.escape
-    rows = [("status", "/status", "Status"), ("events", "/events", "Events"), ("sweeps", "/sweeps", "Sweeps")]
+    rows = [("status", "/status", "Status"), ("events", "/events", "Events"), ("sweeps", "/sweeps", "Sync reports")]
     nav = "".join(f'<a class="bc-nav-row{" bc-nav-row--on" if k == active else ""}" href="{href}"'
                   f'{" aria-current=page" if k == active else ""}>{label}</a>' for k, href, label in rows)
     return ('<div class="bc-shell"><aside class="bc-sidebar">'
@@ -79,14 +79,14 @@ def service_state(worker_alive: bool):
 def render_sweeps(worker_alive: bool) -> str:
     e = html.escape
     tone, label, _, _ = service_state(worker_alive)
-    out = [f"<title>beachsync · sweeps</title>{LINKS}", _shell_open("sweeps", "Sweeps", tone, label),
-           '<div class="bc-page-head"><span class="bc-kicker bc-kicker--page">Safety net</span><h1 class="bc-h1">Sync rollups</h1>'
+    out = [f"<title>beachsync · sync reports</title>{LINKS}", _shell_open("sweeps", "Sync reports", tone, label),
+           '<div class="bc-page-head"><span class="bc-kicker bc-kicker--page">Safety net</span><h1 class="bc-h1">Sync reports</h1>'
            '<p class="bc-intro">The nightly new-id sweep queues TigerBay records whose <em>created</em> webhook never arrived. '
            'The daily drift sweep reconciles every record against HubSpot and re-queues any that differ (missed <em>modified</em> webhooks). '
            'Each run is listed with what it found and how the queued events turned out.</p></div>']
     sweeps = db.list_sweeps()
     if not sweeps:
-        out.append('<section class="bc-section"><p class="bc-empty">No sweeps have run yet. Nightly at 02:40 (new ids) and daily at 04:00 (drift).</p></section>')
+        out.append('<section class="bc-section"><p class="bc-empty">No reports yet. Nightly at 02:40 (new ids) and daily at 04:00 (drift).</p></section>')
     for sw in sweeps:
         sm = sw.get("summary") or {}
         dur = f'{int((sw["finished_at"] or time.time()) - sw["started_at"]) // 60}m {int((sw["finished_at"] or time.time()) - sw["started_at"]) % 60}s'

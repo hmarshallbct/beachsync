@@ -6,7 +6,7 @@ from app.main import app
 
 def test_sweeps_page_lists_runs(tmp_path):
     with TestClient(app) as client:
-        assert "No sweeps have run yet" in client.get("/sweeps").text
+        assert "No reports yet" in client.get("/sweeps").text
         sid = db.start_sweep("new-ids")
         db.enqueue_many("customer", "created", [31757], source="sweep")
         db.finish_sweep(sid, ok=True, summary={"customers": {"from": 31756, "queued": [31757]}, "staff": {"from": 1, "queued": []}})
