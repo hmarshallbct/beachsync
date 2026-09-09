@@ -7,7 +7,9 @@ from collections import defaultdict
 from app import db
 from app.config import settings
 
-LINKS = ('<link rel="stylesheet" href="/static/css/fonts.css"><link rel="stylesheet" href="/static/css/tokens.css">'
+LINKS = ('<link rel="icon" href="/static/favicon.ico" sizes="any"><link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32.png">'
+         '<link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16.png"><link rel="apple-touch-icon" href="/static/apple-touch-icon.png">'
+         '<link rel="stylesheet" href="/static/css/fonts.css"><link rel="stylesheet" href="/static/css/tokens.css">'
          '<link rel="stylesheet" href="/static/css/dashboard.css">')
 
 
