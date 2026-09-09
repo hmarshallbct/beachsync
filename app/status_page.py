@@ -278,7 +278,7 @@ def render_events(worker_alive: bool, status: str = "", source: str = "", limit:
     tone, label, _, _ = service_state(worker_alive)
     rows = db.recent_events(limit, status or None, source or None)
     out = [f"<title>Beachsync · Events</title>{LINKS}", _shell_open("events", "Events", tone, label),
-           '<div class="bc-page-head"><span class="bc-kicker bc-kicker--page">Queue</span><h1 class="bc-h1">Events</h1>'
+           '<div class="bc-page-head"><h1 class="bc-h1">Events</h1>'
            '<p class="bc-intro">Every webhook, fan-out child, sweep and manual replay, newest first. '
            'IDs are TigerBay IDs; the result column says what was written to HubSpot.</p></div>',
            '<section class="bc-section"><form method="get" action="/events" class="bc-filter">'
