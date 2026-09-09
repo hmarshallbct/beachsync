@@ -1,0 +1,61 @@
+# beachsync — TigerBay -> HubSpot profile sync.
+#
+# Own compose project, attached to the shared external `edge` network so the
+# canonical edge proxy (edgerunner/deploy/nginx) can reach it as `beachsync:8080`
+# (see deploy/nginx-beachsync.conf). Nothing is published on the host.
+#
+#     docker compose up -d --build
+#
+services:
+  beachsync:
+    build: .
+    container_name: beachsync
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      TZ: Europe/London
+      DB_PATH: /data/beachsync.db
+      TIGERBAY_CLIENT_SECRET_FILE: /run/secrets/tigerbay_client_secret
+      HUBSPOT_ACCESS_TOKEN_FILE: /run/secrets/hubspot_access_token
+      WEBHOOK_BASIC_PASSWORD_FILE: /run/secrets/webhook_basic_password
+      WEBHOOK_HEADER_VALUE_FILE: /run/secrets/webhook_header_value
+      ADMIN_TOKEN_FILE: /run/secrets/admin_token
+    secrets:
+      - tigerbay_client_secret
+      - hubspot_access_token
+      - webhook_basic_password
+      - webhook_header_value
+      - admin_token
+    volumes:
+      - ./data:/data
+    networks:
+      - edge
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if b'\\\"status\\\": \\\"ok\\\"' in urllib.request.urlopen('http://localhost:8080/health', timeout=3).read() else 1)\" || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 256M
+
+networks:
+  edge:
+    external: true
+
+secrets:
+  tigerbay_client_secret:
+    file: ./secrets/tigerbay_client_secret.txt
+  hubspot_access_token:
+    file: ./secrets/hubspot_access_token.txt
+  webhook_basic_password:
+    file: ./secrets/webhook_basic_password.txt
+  webhook_header_value:
+    file: ./secrets/webhook_header_value.txt
+  admin_token:
+    file: ./secrets/admin_token.txt
