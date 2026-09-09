@@ -89,3 +89,7 @@ def test_opt_out_never_cleared_but_can_be_set():
     d = mapping.diff({"cancel_from_email": "FALSE", "cancel_from_mailing": "TRUE"},
                      {"cancel_from_email": "TRUE", "cancel_from_mailing": "FALSE"})
     assert d == {"cancel_from_mailing": "TRUE"}
+
+
+def test_address_lines_strip_trailing_commas():
+    assert mapping._address_lines({"Address0": "57 High Street,", "Address1": " Hadleigh,", "Address2": ""}) == "57 High Street, Hadleigh"

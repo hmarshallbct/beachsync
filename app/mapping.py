@@ -109,7 +109,9 @@ def _date(v: Any) -> str:
 
 
 def _address_lines(c: dict) -> str:
-    parts = [_s(c.get(k)) for k in ("Address0", "Address1", "Address2", "Address3")]
+    # TigerBay lines often carry their own trailing comma ("57 High Street,"); strip
+    # so joining does not produce "57 High Street,, Hadleigh,".
+    parts = [_s(c.get(k)).strip(" ,") for k in ("Address0", "Address1", "Address2", "Address3")]
     return ", ".join(p for p in parts if p)
 
 
