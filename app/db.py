@@ -254,7 +254,7 @@ def dashboard() -> dict:
             (now - 14 * 86400,)).fetchall()
         recent = conn.execute(
             "SELECT id, received_at, processed_at, source, entity, event, entity_id, status, attempts,"
-            " substr(coalesce(result,''),1,400) AS result, substr(coalesce(last_error,''),1,200) AS last_error"
+            " coalesce(result,'') AS result, substr(coalesce(last_error,''),1,200) AS last_error"
             " FROM events ORDER BY id DESC LIMIT 40").fetchall()
         problems = conn.execute(
             "SELECT id, received_at, source, entity, event, entity_id, status, attempts,"

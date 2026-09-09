@@ -54,8 +54,9 @@ a { color: inherit; text-decoration: none; }
 .bc-herostat-sub { display: block; margin-top: 8px; font-size: 11.5px; color: var(--bc-mute); }
 .bc-statband { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 18px var(--bc-gutter) 0; border-bottom: 2px solid var(--bc-rule); }
 .bc-statcell { padding: 14px 20px 16px 0; }
-.bc-statcell span { display: block; font-size: 9.5px; font-weight: 500; letter-spacing: .26em; text-transform: uppercase; color: var(--bc-gold7); }
-.bc-statcell strong { display: block; margin-top: 6px; font-size: 15px; font-weight: 600; color: var(--bc-ink); }
+.bc-statcell > span { display: block; font-size: 9.5px; font-weight: 500; letter-spacing: .26em; text-transform: uppercase; color: var(--bc-gold7); }
+.bc-statcell strong { display: block; margin-top: 8px; font-size: 15px; font-weight: 600; color: var(--bc-ink); }
+.bc-statcell .bc-status-label { font-size: 15px; font-weight: 600; }
 
 .bc-dot { flex: none; display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #DAD6CD; }
 .bc-dot--pass { background: #658D1B; } .bc-dot--warn { background: #B0A167; } .bc-dot--fail { background: #840B55; } .bc-dot--idle { background: #DAD6CD; }
@@ -69,6 +70,7 @@ a { color: inherit; text-decoration: none; }
 table.bc-grid { width: 100%; border-collapse: collapse; }
 .bc-grid th { padding: 12px 12px 10px 0; text-align: left; font-size: 9.5px; font-weight: 500; letter-spacing: .26em; text-transform: uppercase; color: var(--bc-mute); border-bottom: 1px solid var(--bc-line); }
 .bc-grid td { padding: 13px 12px 13px 0; border-bottom: 1px solid var(--bc-line); vertical-align: top; font-size: 13px; }
+.bc-grid td.when { white-space: nowrap; }
 .bc-grid tr:last-child td { border-bottom: 0; }
 .bc-grid .num { text-align: right; font-family: "Libre Bodoni", Georgia, serif; font-size: 15px; }
 .bc-grid .mute { color: var(--bc-mute); font-size: 12px; }
@@ -76,5 +78,5 @@ table.bc-grid { width: 100%; border-collapse: collapse; }
 code { font-family: ui-monospace, Menlo, monospace; font-size: 11.5px; background: var(--bc-alt); padding: 2px 5px; }
 .bc-empty { margin: 14px 0 0; font-size: 13px; color: var(--bc-mute); }
 .bc-foot { margin: 40px var(--bc-gutter) 30px; padding-top: 14px; border-top: 1px solid var(--bc-line); display: flex; justify-content: space-between; align-items: center; }
-.bc-foot img { height: 22px; width: auto; opacity: .85; filter: invert(1) brightness(.2); }
+.bc-foot img { height: 22px; width: auto; opacity: .85; }
 @media (max-width: 900px) { .bc-shell { grid-template-columns: 1fr; } .bc-sidebar { display: none; } .bc-herostats, .bc-statband { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

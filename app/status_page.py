@@ -104,7 +104,7 @@ def render(worker_alive: bool, worker_tick: float) -> str:
     if d["problems"]:
         out.append('<table class="bc-grid"><tr><th>#</th><th>When</th><th>Source</th><th>Entity</th><th>Event</th><th>Id</th><th>Status</th><th>Tries</th><th>Error / body</th></tr>')
         for p in d["problems"]:
-            out.append(f'<tr><td class="mute">{p["id"]}</td><td>{_t(p["received_at"])}</td><td>{e(p["source"])}</td><td>{e(p["entity"])}</td>'
+            out.append(f'<tr><td class="mute">{p["id"]}</td><td class="when">{_t(p["received_at"])}</td><td>{e(p["source"])}</td><td>{e(p["entity"])}</td>'
                        f'<td>{e(p["event"])}</td><td>{p["entity_id"] or ""}</td><td>{_dot(p["status"])}</td><td>{p["attempts"]}</td>'
                        f'<td><code>{e(p["last_error"] or p["raw_body"])}</code></td></tr>')
         out.append("</table>")
@@ -118,7 +118,7 @@ def render(worker_alive: bool, worker_tick: float) -> str:
         res = ""
         if r["result"]:
             try:
-                j = json.loads(r["result"]) if r["result"].endswith("}") else None
+                j = json.loads(r["result"])
             except ValueError:
                 j = None
             if j:
@@ -135,11 +135,11 @@ def render(worker_alive: bool, worker_tick: float) -> str:
                 res = r["result"][:120]
         elif r["last_error"]:
             res = r["last_error"]
-        out.append(f'<tr><td class="mute">{r["id"]}</td><td>{_t(r["received_at"])}</td><td>{e(r["source"])}</td><td>{e(r["entity"])}</td>'
+        out.append(f'<tr><td class="mute">{r["id"]}</td><td class="when">{_t(r["received_at"])}</td><td>{e(r["source"])}</td><td>{e(r["entity"])}</td>'
                    f'<td>{e(r["event"])}</td><td>{r["entity_id"] or ""}</td><td>{_dot(r["status"])}</td><td class="mute">{e(res)}</td></tr>')
     out.append("</table></section>")
     out.append('<div class="bc-foot"><span class="bc-meta">beachsync · Beachcomber Tours</span>'
-               '<img src="/static/logos/logo-wordmark-white.svg" alt="Beachcomber Tours"></div>')
+               '<img src="/static/logos/logo-wordmark-navy.svg" alt="Beachcomber Tours"></div>')
     out.append("</main></div></div>")
     return "".join(out)
 
