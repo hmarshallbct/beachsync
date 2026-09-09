@@ -193,10 +193,18 @@ The suite uses in-memory fakes of both APIs with the real payload shapes.
 - `bin/sweep_new_ids.sh` (cron, nightly 02:40): finds TigerBay customers and
   staff with ids above the highest this service has seen and queues them as
   `created` (source `sweep`).
-- `bin/sweep_drift.sh` (cron, Sundays 04:00): runs the full reconciliation and
+- `bin/sweep_drift.sh` (cron, daily 04:00): runs the full reconciliation and
   queues every matched record with an actionable difference as `modified`
   (source `sweep`, so an existing HubSpot email is kept). Records with no
-  HubSpot match are not created by the sweep.
+  HubSpot match are not created by the sweep. Both sweeps post a rollup to the
+  Teams alert channel (new-ids only when it found something).
+
+## Status dashboard
+
+`https://beachsync.bctuk.com/status` (LAN/tailnet only, wildcard cert, vhost in
+`deploy/nginx-beachsync-lan.conf`): service state, last webhook, counts,
+events per day, failures needing attention, recent events. Ids only, no
+personal data. `/status.json` for the raw numbers.
 
 ## Queue behaviour
 

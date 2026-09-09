@@ -243,6 +243,33 @@ def counts() -> dict:
         conn.close()
 
 
+def dashboard() -> dict:
+    """Read-only aggregates for the /status page. No personal data: ids only."""
+    conn = connect()
+    try:
+        now = time.time()
+        days = conn.execute(
+            "SELECT date(received_at,'unixepoch','localtime') AS d, source, status, COUNT(*) AS n"
+            " FROM events WHERE received_at>=? GROUP BY d, source, status ORDER BY d",
+            (now - 14 * 86400,)).fetchall()
+        recent = conn.execute(
+            "SELECT id, received_at, processed_at, source, entity, event, entity_id, status, attempts,"
+            " substr(coalesce(result,''),1,400) AS result, substr(coalesce(last_error,''),1,200) AS last_error"
+            " FROM events ORDER BY id DESC LIMIT 40").fetchall()
+        problems = conn.execute(
+            "SELECT id, received_at, source, entity, event, entity_id, status, attempts,"
+            " substr(coalesce(last_error,''),1,300) AS last_error, substr(coalesce(raw_body,''),1,300) AS raw_body"
+            " FROM events WHERE status IN ('failed','unparsed') ORDER BY id DESC LIMIT 50").fetchall()
+        actions = conn.execute(
+            "SELECT json_extract(result,'$.action') AS a, COUNT(*) AS n FROM events"
+            " WHERE status IN ('done','skipped') AND received_at>=? GROUP BY a", (now - 7 * 86400,)).fetchall()
+        return {"days": [dict(r) for r in days], "recent": [dict(r) for r in recent],
+                "problems": [dict(r) for r in problems], "actions_7d": {r["a"] or "?": r["n"] for r in actions},
+                "counts": counts()}
+    finally:
+        conn.close()
+
+
 # --- id map ----------------------------------------------------------------
 
 def get_map(entity: str, tigerbay_id: int) -> Optional[dict]:

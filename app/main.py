@@ -22,7 +22,7 @@ from contextlib import asynccontextmanager
 from typing import Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 
 from app import db, webhook
 from app.config import settings
@@ -186,6 +186,21 @@ def health():
             "dry_run": settings.effective_dry_run(), "dry_run_forced_by_nonprod_tigerbay":
             settings.effective_dry_run() and not settings.dry_run, "hubspot_schema": _schema_bootstrap,
             "webhook_auth_configured": settings.webhook_auth_configured(), "time": time.time()}
+
+
+@app.get("/status", response_class=HTMLResponse)
+def status_page():
+    """Read-only dashboard: ids and counts only, no personal data. Reachable on the
+    LAN vhost only; the public (Cloudflare) vhost exposes just /webhooks and /health."""
+    from app.status_page import render
+    alive = bool(_worker and _worker.is_alive() and _worker.worker_alive()) if settings.worker_enabled else True
+    body = render(alive, _worker.last_tick if _worker else 0)
+    return HTMLResponse('<meta http-equiv="refresh" content="60">' + body)
+
+
+@app.get("/status.json")
+def status_json():
+    return db.dashboard()
 
 
 @app.get("/admin/events", dependencies=[Depends(require_admin)])

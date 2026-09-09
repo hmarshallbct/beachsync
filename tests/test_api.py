@@ -65,3 +65,10 @@ def test_admin_dismiss(client):
     assert client.post(f"/admin/events/{eid}/dismiss", headers=h).status_code == 200
     assert db.get_event(eid)["status"] == "dismissed"
     assert client.post(f"/admin/events/{eid}/dismiss", headers=h).status_code == 409
+
+
+def test_status_page(client):
+    client.post("/webhooks/tigerbay/customer/created", json={"Id": 22926}, headers=basic())
+    r = client.get("/status")
+    assert r.status_code == 200 and "beachsync" in r.text and "22926" in r.text
+    assert client.get("/status.json").json()["counts"]["pending"] == 1
