@@ -23,6 +23,8 @@ from typing import Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+import os as _os
 
 from app import db, webhook
 from app.config import settings
@@ -64,6 +66,9 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="beachsync", version="1.0.0", lifespan=lifespan, docs_url=None, redoc_url=None,
               openapi_url=None)
+
+
+app.mount("/static", StaticFiles(directory=_os.path.join(_os.path.dirname(__file__), "static")), name="static")
 
 
 # --- auth ----------------------------------------------------------------------

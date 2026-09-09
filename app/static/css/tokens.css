@@ -1,0 +1,99 @@
+/* Beachcheck — design tokens.
+   Linked after fonts.css, before beachcheck.css.
+
+   Two colour families, and conflating them is the mistake to avoid:
+
+   1. Themed roles (--bc-bg, --bc-ink, --bc-line, --bc-rule, --bc-nav,
+      --bc-band*, --bc-gold7, --bc-danger) flip per theme. Always reference
+      these through var().
+   2. Fixed accents — the gold #B0A167, the status dot colours, the tint pill
+      pairs — are identical in all three themes, because each one carries its
+      own background and its ink was chosen against that background. Making the
+      gold themed would mean re-deriving its ink for every theme, for no gain.
+      They are named at the bottom for reference, and written as literals at
+      the point of use in beachcheck.css.
+
+   Every name carries a --bc- prefix. The design pack's tokens.css does not,
+   but the stylesheet this replaced defined --ink and --surface with quite
+   different values, and the two had to coexist until the last screen was
+   migrated. Prefixing is what let that one be deleted without a rename pass.
+
+   Paper is the default and has no attribute. Set data-theme="chrome" or
+   data-theme="dark" on <html> to switch.
+*/
+
+:root,
+[data-theme="paper"] {
+  --bc-bg: #FFFFFF;
+  --bc-surface: #FFFFFF;
+  --bc-alt: #F5F3EE;
+  --bc-ink: #1C1C1A;
+  --bc-mute: #6E6B64;
+  --bc-line: #DAD6CD;
+  --bc-rule: #1C1C1A;
+  --bc-nav: #0B263D;
+  --bc-band: #FFFFFF;
+  --bc-band-ink: #1C1C1A;
+  --bc-band-mute: #6E6B64;
+  --bc-band-kicker: #74683A;
+  --bc-gold7: #74683A;
+  --bc-danger: #840B55;
+}
+
+[data-theme="chrome"] {
+  --bc-bg: #FFFFFF;
+  --bc-surface: #FFFFFF;
+  --bc-alt: #F5F3EE;
+  --bc-ink: #1C1C1A;
+  --bc-mute: #6E6B64;
+  --bc-line: #DAD6CD;
+  --bc-rule: #0B263D;
+  --bc-nav: #071A2A;
+  --bc-band: #0B263D;
+  --bc-band-ink: #FFFFFF;
+  --bc-band-mute: rgba(255, 255, 255, .7);
+  --bc-band-kicker: #D6CBA1;
+  --bc-gold7: #74683A;
+  --bc-danger: #840B55;
+}
+
+[data-theme="dark"] {
+  --bc-bg: #0B263D;
+  --bc-surface: #16354F;
+  --bc-alt: #16354F;
+  --bc-ink: #F5F3EE;
+  --bc-mute: #93A1AF;
+  --bc-line: rgba(255, 255, 255, .16);
+  --bc-rule: rgba(255, 255, 255, .55);
+  --bc-nav: #071A2A;
+  --bc-band: #071A2A;
+  --bc-band-ink: #FFFFFF;
+  --bc-band-mute: rgba(255, 255, 255, .7);
+  --bc-band-kicker: #D6CBA1;
+  --bc-gold7: #D6CBA1;
+  --bc-danger: #E5A4C6;
+}
+
+/* Fixed accents and layout constants — same in every theme. */
+:root {
+  --bc-gold: #B0A167;         /* primary actions, active spines, 6px accents */
+  --bc-gold-ink: #0B263D;     /* ink on gold, never white */
+  --bc-dot-pass: #658D1B;
+  --bc-dot-idle: #DAD6CD;
+  --bc-dot-fail: #840B55;
+
+  --bc-tint-gold: #F6F3E9;    --bc-tint-gold-ink: #74683A;
+  --bc-tint-green: #EFF3E5;   --bc-tint-green-ink: #3F5811;
+  --bc-tint-pink: #F6E7EF;    --bc-tint-pink-ink: #520734;
+  --bc-tint-teal: #E6F0F2;    --bc-tint-teal-ink: #00404E;
+  --bc-tint-purple: #EDE9F3;  --bc-tint-purple-ink: #331E4B;
+
+  /* Active-row tints: one for light grounds, one for the navy sidebar. */
+  --bc-active-tint: rgba(176, 161, 103, .12);
+  --bc-active-tint-nav: rgba(255, 255, 255, .07);
+
+  --bc-gutter: 32px;          /* page gutter, both sides, every screen */
+  --bc-sidebar: 236px;
+  --bc-rail: 264px;
+  --bc-band-h: 64px;          /* header bar; the sidebar rule must land here */
+}
