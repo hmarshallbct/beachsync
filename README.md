@@ -157,6 +157,17 @@ configured HubSpot rate (~80 req/10 s). Re-running is safe; unchanged records
 are no-ops. Consider a weekly cron of `backfill all` as a safety net for missed
 webhooks.
 
+### Deploying a change
+
+```bash
+scripts/deploy.sh "what changed"
+```
+
+Runs the tests (a failure stops here), rebuilds and restarts the container,
+waits for `/health` to report ok with the worker alive (rolls back to the
+previous image if not), then commits and pushes. `--no-push` skips git,
+`--check` only runs tests and the health probe.
+
 ### Tests
 
 ```bash
