@@ -24,6 +24,15 @@ def _ago(ts):
     return f"{d // 86400}d ago"
 
 
+def _dur(seconds: int) -> str:
+    seconds = int(seconds)
+    if seconds < 60:
+        return f"{seconds}s"
+    if seconds < 3600:
+        return f"{seconds // 60}m"
+    return f"{seconds // 3600}h {seconds % 3600 // 60}m"
+
+
 def _t(ts):
     return time.strftime("%d %b %H:%M:%S", time.localtime(ts)) if ts else ""
 
@@ -125,11 +134,11 @@ def render_sweeps(worker_alive: bool) -> str:
                        + "".join(f'<td class="num" style="text-align:left">{n}</td>' for _, n in top) + "</tr></table>")
         ids = (sm.get("customers", {}).get("queued") if sw["kind"] == "new-ids" else None)
         if ids:
-            out.append(f'<p class="bc-meta" style="margin-top:12px">Customer ids: {e(", ".join(map(str, ids[:60])))}'
+            out.append(f'<p class="bc-meta" style="margin-top:12px">Customer IDs: {e(", ".join(map(str, ids[:60])))}'
                        + (" …" if len(ids) > 60 else "") + "</p>")
         if sw["kind"] == "new-ids" and sm.get("staff", {}).get("queued"):
             sids = sm["staff"]["queued"]
-            out.append(f'<p class="bc-meta">Staff ids: {e(", ".join(map(str, sids[:60])))}' + (" …" if len(sids) > 60 else "") + "</p>")
+            out.append(f'<p class="bc-meta">Staff IDs: {e(", ".join(map(str, sids[:60])))}' + (" …" if len(sids) > 60 else "") + "</p>")
         if sw["kind"] == "drift" and sw["report_path"] and sw["ok"]:
             out.append(f'<p class="bc-meta" style="margin-top:12px"><a class="bc-link" href="/sweeps/{sw["id"]}/report">Download the Diff CSV</a> '
                        '(contains names and emails; LAN only)</p>')
@@ -173,10 +182,11 @@ def render(worker_alive: bool, worker_tick: float, resume_denied: bool = False) 
                    '<button class="bc-btn bc-btn--danger" type="submit">Pause Sync</button></form></div>')
 
     # hero figures
-    heros = [("Pending", c.get("pending", 0), f"oldest {c.get('oldest_pending_age_s') or 0}s"),
-             ("Failed", c.get("failed", 0), "need attention"),
-             ("Unparsed", c.get("unparsed", 0), "webhook shape"),
-             ("Mapped", c.get("mapped", 0), "TigerBay → HubSpot ids")]
+    age = c.get("oldest_pending_age_s") or 0
+    heros = [("Pending", c.get("pending", 0), "Waiting to sync" + (f", oldest {_dur(age)}" if age else "")),
+             ("Failed", c.get("failed", 0), "Needs attention"),
+             ("Unparsed", c.get("unparsed", 0), "Webhook not recognised"),
+             ("Mapped", c.get("mapped", 0), "TigerBay → HubSpot IDs")]
     out.append('<div class="bc-herostats">')
     for label, val, sub in heros:
         out.append(f'<div class="bc-herostat"><span class="bc-kicker">{label}</span><span class="bc-fig bc-fig--35">{val}</span>'
@@ -211,7 +221,7 @@ def render(worker_alive: bool, worker_tick: float, resume_denied: bool = False) 
 
     out.append('<section class="bc-section"><div class="bc-section-head"><h2 class="bc-h2">Needs Attention</h2><span class="bc-meta">failed and unparsed</span></div>')
     if d["problems"]:
-        out.append('<table class="bc-grid"><tr><th>#</th><th>When</th><th>Source</th><th>Entity</th><th>Event</th><th>Id</th><th>Status</th><th>Tries</th><th>Error / Body</th></tr>')
+        out.append('<table class="bc-grid"><tr><th>#</th><th>When</th><th>Source</th><th>Entity</th><th>Event</th><th>ID</th><th>Status</th><th>Tries</th><th>Error / Body</th></tr>')
         for p in d["problems"]:
             out.append(f'<tr><td class="mute">{p["id"]}</td><td class="when">{_t(p["received_at"])}</td><td>{e(p["source"])}</td><td>{e(p["entity"])}</td>'
                        f'<td>{e(p["event"])}</td><td>{p["entity_id"] or ""}</td><td>{_dot(p["status"])}</td><td>{p["attempts"]}</td>'
@@ -253,7 +263,7 @@ def _result_text(r: dict) -> str:
 
 def _event_rows(rows: list[dict]) -> str:
     e = html.escape
-    out = ['<table class="bc-grid"><tr><th>#</th><th>Received</th><th>Source</th><th>Entity</th><th>Event</th><th>Id</th><th>Status</th><th>Result</th></tr>']
+    out = ['<table class="bc-grid"><tr><th>#</th><th>Received</th><th>Source</th><th>Entity</th><th>Event</th><th>ID</th><th>Status</th><th>Result</th></tr>']
     for r in rows:
         out.append(f'<tr><td class="mute">{r["id"]}</td><td class="when">{_t(r["received_at"])}</td><td>{e(r["source"])}</td><td>{e(r["entity"])}</td>'
                    f'<td>{e(r["event"])}</td><td>{r["entity_id"] or ""}</td><td>{_dot(r["status"])}</td><td class="mute">{e(_result_text(r))}</td></tr>')
@@ -272,7 +282,7 @@ def render_events(worker_alive: bool, status: str = "", source: str = "", limit:
     out = [f"<title>Beachsync · Events</title>{LINKS}", _shell_open("events", "Events", tone, label),
            '<div class="bc-page-head"><span class="bc-kicker bc-kicker--page">Queue</span><h1 class="bc-h1">Events</h1>'
            '<p class="bc-intro">Every webhook, fan-out child, sweep and manual replay, newest first. '
-           'Ids are TigerBay ids; the result column says what was written to HubSpot.</p></div>',
+           'IDs are TigerBay IDs; the result column says what was written to HubSpot.</p></div>',
            '<section class="bc-section"><form method="get" action="/events" class="bc-filter">'
            '<label class="bc-kicker">Status</label><select class="bc-input bc-select" name="status" onchange="this.form.submit()"><option value="">all</option>'
            + "".join(f'<option value="{s_}"{" selected" if s_ == status else ""}>{s_}</option>' for s_ in STATUSES)
