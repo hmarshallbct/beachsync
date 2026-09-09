@@ -70,7 +70,7 @@ def test_admin_dismiss(client):
 def test_status_page(client):
     client.post("/webhooks/tigerbay/customer/created", json={"Id": 22926}, headers=basic())
     r = client.get("/status")
-    assert r.status_code == 200 and "beachsync" in r.text and "22926" not in r.text   # events moved to /events
+    assert r.status_code == 200 and "Beachsync" in r.text and "22926" not in r.text   # events moved to /events
     ev = client.get("/events").text
     assert "22926" in ev and "pending" in ev
     assert "22926" not in client.get("/events?status=done").text
@@ -88,7 +88,7 @@ def test_kill_switch(client, tb, hs, monkeypatch):
     assert r.status_code == 303 and db.paused()["value"] == "testing"
     assert client.post("/webhooks/tigerbay/customer/created", json={"Id": 1}, headers=basic()).status_code == 202
     assert w.drain(ctx) == 0 and db.list_events()[0]["status"] == "pending"
-    assert "Sync is paused" in client.get("/status").text
+    assert "Sync Is Paused" in client.get("/status").text
     assert client.get("/health").json()["paused"]["value"] == "testing"
     # resume needs the admin token
     r = client.post("/status/resume", data={"token": "wrong"}, follow_redirects=False)
