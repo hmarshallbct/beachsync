@@ -279,8 +279,7 @@ def render_events(worker_alive: bool, status: str = "", source: str = "", limit:
     rows = db.recent_events(limit, status or None, source or None)
     out = [f"<title>Beachsync · Events</title>{LINKS}", _shell_open("events", "Events", tone, label),
            '<div class="bc-page-head"><h1 class="bc-h1">Events</h1>'
-           '<p class="bc-intro">Every webhook, fan-out child, sweep and manual replay, newest first. '
-           'IDs are TigerBay IDs; the result column says what was written to HubSpot.</p></div>',
+           '<p class="bc-intro">Everything that has entered the queue, newest first.</p></div>',
            '<section class="bc-section"><form method="get" action="/events" class="bc-filter">'
            '<label class="bc-kicker">Status</label><select class="bc-input bc-select" name="status" onchange="this.form.submit()"><option value="">all</option>'
            + "".join(f'<option value="{s_}"{" selected" if s_ == status else ""}>{s_}</option>' for s_ in STATUSES)
