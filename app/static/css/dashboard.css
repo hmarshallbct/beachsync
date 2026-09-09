@@ -82,3 +82,17 @@ code { font-family: ui-monospace, Menlo, monospace; font-size: 11.5px; backgroun
 .bc-foot { margin: 40px var(--bc-gutter) 30px; padding-top: 14px; border-top: 1px solid var(--bc-line); display: flex; justify-content: space-between; align-items: center; }
 .bc-foot img { height: 22px; width: auto; opacity: .85; }
 @media (max-width: 900px) { .bc-shell { grid-template-columns: 1fr; } .bc-sidebar { display: none; } .bc-herostats, .bc-statband { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* Kill switch panel: a 6px accent like the hero stats; pink when tripped. */
+.bc-switch { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin: 24px var(--bc-gutter) 0; padding: 18px 24px 18px 20px; border-left: 6px solid #B0A167; background: var(--bc-alt); }
+.bc-switch--off { border-left-color: #840B55; background: #F6E7EF; }
+.bc-switch .bc-kicker { display: block; margin-bottom: 6px; }
+.bc-switch .bc-intro { margin-top: 6px; max-width: 640px; }
+.bc-danger { color: var(--bc-danger); }
+.bc-switch-form { display: flex; gap: 10px; flex: none; margin: 0; }
+.bc-input { height: 36px; padding: 0 12px; border: 1px solid var(--bc-line); background: #fff; font-family: "Montserrat", sans-serif; font-size: 13px; color: var(--bc-ink); min-width: 220px; }
+.bc-input:focus-visible { outline: 2px solid #B0A167; outline-offset: 2px; }
+.bc-btn { display: inline-flex; align-items: center; height: 36px; padding: 0 16px; border: 0; cursor: pointer; font-family: "Montserrat", sans-serif; font-size: 10.5px; font-weight: 600; letter-spacing: .2em; text-transform: uppercase; }
+.bc-btn--gold { background: #B0A167; color: #0B263D; }
+.bc-btn--danger { background: #840B55; color: #fff; }
+.bc-btn:hover { filter: brightness(1.08); }

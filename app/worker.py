@@ -56,6 +56,8 @@ def process_one(ev: dict, ctx: Optional[SyncContext] = None) -> str:
 def drain(ctx: Optional[SyncContext] = None, max_events: Optional[int] = None) -> int:
     n = 0
     while max_events is None or n < max_events:
+        if db.paused():
+            break
         ev = db.claim_next_event()
         if ev is None:
             break
@@ -123,6 +125,9 @@ class Worker(threading.Thread):
         while not self._stop.is_set():
             self.last_tick = time.time()
             try:
+                if db.paused():
+                    self._stop.wait(settings.worker_poll_seconds)
+                    continue
                 if drain(self._ctx, max_events=50) == 0:
                     self._stop.wait(settings.worker_poll_seconds)
             except Exception:  # noqa: BLE001

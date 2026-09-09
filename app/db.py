@@ -37,6 +37,12 @@ CREATE TABLE IF NOT EXISTS events (
 CREATE INDEX IF NOT EXISTS ix_events_status_next ON events(status, next_attempt_at);
 CREATE INDEX IF NOT EXISTS ix_events_entity ON events(entity, entity_id);
 
+CREATE TABLE IF NOT EXISTS flags (
+    key        TEXT PRIMARY KEY,
+    value      TEXT,
+    updated_at REAL NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS hubspot_map (
     entity        TEXT    NOT NULL,           -- customer | staff | agent
     tigerbay_id   INTEGER NOT NULL,
@@ -268,6 +274,31 @@ def dashboard() -> dict:
                 "counts": counts()}
     finally:
         conn.close()
+
+
+# --- flags (kill switch) ------------------------------------------------------
+
+def get_flag(key: str) -> Optional[dict]:
+    conn = connect()
+    try:
+        row = conn.execute("SELECT value, updated_at FROM flags WHERE key=?", (key,)).fetchone()
+        return {"value": row["value"], "updated_at": row["updated_at"]} if row else None
+    finally:
+        conn.close()
+
+
+def set_flag(key: str, value: Optional[str]) -> None:
+    with tx() as conn:
+        if value is None:
+            conn.execute("DELETE FROM flags WHERE key=?", (key,))
+        else:
+            conn.execute("INSERT INTO flags (key, value, updated_at) VALUES (?,?,?) ON CONFLICT(key)"
+                         " DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at", (key, value, time.time()))
+
+
+def paused() -> Optional[dict]:
+    """The kill switch. Survives restarts; webhooks keep queueing while set."""
+    return get_flag("paused")
 
 
 # --- id map ----------------------------------------------------------------

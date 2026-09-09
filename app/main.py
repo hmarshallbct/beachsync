@@ -21,8 +21,8 @@ import time
 from contextlib import asynccontextmanager
 from typing import Optional
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import Depends, FastAPI, Form, HTTPException, Query, Request
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 import os as _os
 
@@ -190,22 +190,42 @@ def health():
             "worker_last_tick": _worker.last_tick if _worker else None, "queue": c,
             "dry_run": settings.effective_dry_run(), "dry_run_forced_by_nonprod_tigerbay":
             settings.effective_dry_run() and not settings.dry_run, "hubspot_schema": _schema_bootstrap,
-            "webhook_auth_configured": settings.webhook_auth_configured(), "time": time.time()}
+            "webhook_auth_configured": settings.webhook_auth_configured(), "paused": db.paused(),
+            "time": time.time()}
 
 
 @app.get("/status", response_class=HTMLResponse)
-def status_page():
+def status_page(resume: Optional[str] = None):
     """Read-only dashboard: ids and counts only, no personal data. Reachable on the
     LAN vhost only; the public (Cloudflare) vhost exposes just /webhooks and /health."""
     from app.status_page import render
     alive = bool(_worker and _worker.is_alive() and _worker.worker_alive()) if settings.worker_enabled else True
-    body = render(alive, _worker.last_tick if _worker else 0)
+    body = render(alive, _worker.last_tick if _worker else 0, resume_denied=(resume == "denied"))
     return HTMLResponse('<meta http-equiv="refresh" content="60">' + body)
 
 
 @app.get("/status.json")
 def status_json():
     return db.dashboard()
+
+
+@app.post("/status/pause")
+def status_pause(reason: str = Form("")):
+    """Kill switch. Stopping is deliberately unauthenticated on the LAN page: the safe
+    direction should be one click. Webhooks keep being accepted and queued."""
+    db.set_flag("paused", (reason or "paused from status page").strip()[:200])
+    log.warning("SYNC PAUSED: %s", reason)
+    return RedirectResponse("/status", status_code=303)
+
+
+@app.post("/status/resume")
+def status_resume(token: str = Form("")):
+    """Resuming needs the admin token: it is the direction that writes to HubSpot."""
+    if not settings.admin_token or not hmac.compare_digest(token.strip(), settings.admin_token):
+        return RedirectResponse("/status?resume=denied", status_code=303)
+    db.set_flag("paused", None)
+    log.warning("SYNC RESUMED from status page")
+    return RedirectResponse("/status", status_code=303)
 
 
 @app.get("/admin/events", dependencies=[Depends(require_admin)])

@@ -206,6 +206,11 @@ The suite uses in-memory fakes of both APIs with the real payload shapes.
 events per day, failures needing attention, recent events. Ids only, no
 personal data. `/status.json` for the raw numbers.
 
+**Kill switch** on the status page: *Pause sync* (one click, optional reason)
+stops all HubSpot writes immediately and persists across restarts; webhooks keep
+being accepted and queued so nothing is lost. *Resume* requires the admin token.
+While paused the health check posts a reminder to Teams once an hour.
+
 ## Queue behaviour
 
 - **Fan-out.** An event for an agency id queues one child event per staff

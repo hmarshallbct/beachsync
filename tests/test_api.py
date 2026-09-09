@@ -72,3 +72,23 @@ def test_status_page(client):
     r = client.get("/status")
     assert r.status_code == 200 and "beachsync" in r.text and "22926" in r.text
     assert client.get("/status.json").json()["counts"]["pending"] == 1
+
+
+def test_kill_switch(client, tb, hs, monkeypatch):
+    from app import worker as w
+    from app.sync import SyncContext
+    ctx = SyncContext(tb=tb, hs=hs, dry_run=False, inline_fanout=True)
+    tb.add_customer(1)
+    # pause: no auth, reason stored, queue still accepts and nothing is processed
+    r = client.post("/status/pause", data={"reason": "testing"}, follow_redirects=False)
+    assert r.status_code == 303 and db.paused()["value"] == "testing"
+    assert client.post("/webhooks/tigerbay/customer/created", json={"Id": 1}, headers=basic()).status_code == 202
+    assert w.drain(ctx) == 0 and db.list_events()[0]["status"] == "pending"
+    assert "Sync is paused" in client.get("/status").text
+    assert client.get("/health").json()["paused"]["value"] == "testing"
+    # resume needs the admin token
+    r = client.post("/status/resume", data={"token": "wrong"}, follow_redirects=False)
+    assert r.headers["location"].endswith("resume=denied") and db.paused()
+    r = client.post("/status/resume", data={"token": "admin-token"}, follow_redirects=False)
+    assert r.status_code == 303 and db.paused() is None
+    assert w.drain(ctx) == 1 and db.list_events()[0]["status"] == "done"

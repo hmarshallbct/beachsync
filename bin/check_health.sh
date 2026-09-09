@@ -39,7 +39,17 @@ if [ -z "$H" ]; then
     exit 0
 fi
 
-read -r status worker dry failed unparsed pending_age last_webhook <<<"$(printf '%s' "$H" | jq -r '[.status, .worker_alive, .dry_run, (.queue.failed // 0), (.queue.unparsed // 0), (.queue.oldest_pending_age_s // 0), (.queue.last_webhook_at // 0)] | @tsv')"
+read -r status worker dry failed unparsed pending_age last_webhook paused <<<"$(printf '%s' "$H" | jq -r '[.status, .worker_alive, .dry_run, (.queue.failed // 0), (.queue.unparsed // 0), (.queue.oldest_pending_age_s // 0), (.queue.last_webhook_at // 0), (.paused != null)] | @tsv')"
+PAUSE_STATE=$DIR/logs/check_health.paused
+if [ "$paused" = "true" ]; then
+    last=$(cat "$PAUSE_STATE" 2>/dev/null || echo 0)
+    if [ $(( $(date +%s) - last )) -ge 3600 ]; then
+        notify "beachsync: sync is PAUSED (kill switch on the status page). Webhooks are queueing ($(printf '%s' "$H" | jq -r '.queue.pending // 0') pending). Resume at https://beachsync.bctuk.com/status"
+        date +%s > "$PAUSE_STATE"
+    fi
+    echo "$failed" > "$STATE"; exit 0
+fi
+rm -f "$PAUSE_STATE"
 
 prev_failed=$(cat "$STATE" 2>/dev/null || echo 0)
 msgs=()

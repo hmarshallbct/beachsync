@@ -37,15 +37,18 @@ def _pill(text: str, tone: str) -> str:
     return f'<span class="bc-pill bc-pill--{tone}">{html.escape(text)}</span>'
 
 
-def render(worker_alive: bool, worker_tick: float) -> str:
+def render(worker_alive: bool, worker_tick: float, resume_denied: bool = False) -> str:
     d = db.dashboard()
     c = d["counts"]
     e = html.escape
     dry = settings.effective_dry_run()
+    paused = db.paused()
     service_tone = "pass" if worker_alive and not dry else ("warn" if worker_alive else "fail")
     service_label = "worker running" if worker_alive else "worker down"
     if worker_alive and dry:
         service_label = "dry run"
+    if paused:
+        service_tone, service_label = "fail", "sync paused"
     out = [f"<title>beachsync · status</title>{LINKS}",
            '<div class="bc-shell"><aside class="bc-sidebar">'
            '<a class="bc-brand" href="/status"><img src="/static/logos/logo-shell-white.svg" alt="" width="26" height="31">'
@@ -62,6 +65,23 @@ def render(worker_alive: bool, worker_tick: float) -> str:
            '<main class="bc-page">',
            '<div class="bc-page-head"><span class="bc-kicker bc-kicker--page">Profile sync</span><h1 class="bc-h1">TigerBay → HubSpot</h1>'
            '<p class="bc-intro">Customer and agent-staff profiles, kept in step by TigerBay webhooks with a nightly new-id sweep and a daily drift repair. Refreshes every minute.</p></div>']
+
+    # kill switch
+    if paused:
+        out.append('<div class="bc-switch bc-switch--off"><div><span class="bc-kicker">Kill switch</span>'
+                   f'<h2 class="bc-h2">Sync is paused</h2><p class="bc-intro">Since {e(_t(paused["updated_at"]))} · {e(paused["value"])}. '
+                   'Webhooks are still being received and queued; nothing is written to HubSpot until resumed.</p>'
+                   + ('<p class="bc-intro bc-danger">Admin token not accepted.</p>' if resume_denied else '') + '</div>'
+                   '<form method="post" action="/status/resume" class="bc-switch-form">'
+                   '<input class="bc-input" type="password" name="token" placeholder="Admin token" autocomplete="off" required>'
+                   '<button class="bc-btn bc-btn--gold" type="submit">Resume sync</button></form></div>')
+    else:
+        out.append('<div class="bc-switch"><div><span class="bc-kicker">Kill switch</span>'
+                   '<h2 class="bc-h2">Sync is running</h2><p class="bc-intro">Pausing stops all writes to HubSpot immediately. '
+                   'Webhooks keep queueing, so nothing is lost; resuming needs the admin token.</p></div>'
+                   '<form method="post" action="/status/pause" class="bc-switch-form" onsubmit="return confirm(\'Pause the TigerBay → HubSpot sync?\')">'
+                   '<input class="bc-input" type="text" name="reason" placeholder="Reason (optional)" maxlength="200">'
+                   '<button class="bc-btn bc-btn--danger" type="submit">Pause sync</button></form></div>')
 
     # hero figures
     heros = [("Pending", c.get("pending", 0), f"oldest {c.get('oldest_pending_age_s') or 0}s"),
