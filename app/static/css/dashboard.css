@@ -35,7 +35,9 @@ a { color: inherit; text-decoration: none; }
 .bc-band-note { font-size: 12px; font-weight: 500; color: var(--bc-band-mute); }
 .bc-band-div { width: 1px; height: 24px; background: var(--bc-line); }
 
-.bc-page { flex: 1; min-width: 0; max-width: 1240px; width: 100%; margin: 0 auto; }
+.bc-main-col { min-height: 100vh; }
+.bc-page { flex: 1; min-width: 0; max-width: 1240px; width: 100%; margin: 0 auto; display: flex; flex-direction: column; }
+.bc-page > * { flex: none; }
 .bc-page-head { margin: 0 var(--bc-gutter); padding: 34px 0 15px; border-bottom: 2px solid var(--bc-rule); }
 .bc-page-head .bc-kicker { display: block; margin-bottom: 8px; }
 .bc-h1 { margin: 0; font-family: "Didot Display", "Didot", serif; font-size: 40px; line-height: 1.02; letter-spacing: -.01em; font-weight: 700; }
@@ -79,7 +81,8 @@ table.bc-grid { width: 100%; border-collapse: collapse; }
 .bc-bar { display: block; height: 8px; background: #B0A167; }
 code { font-family: ui-monospace, Menlo, monospace; font-size: 11.5px; background: var(--bc-alt); padding: 2px 5px; }
 .bc-empty { margin: 14px 0 0; font-size: 13px; color: var(--bc-mute); }
-.bc-foot { margin: 40px var(--bc-gutter) 30px; padding-top: 14px; border-top: 1px solid var(--bc-line); display: flex; justify-content: space-between; align-items: center; }
+.bc-foot { margin: auto var(--bc-gutter) 30px; padding-top: 14px; }
+.bc-foot { margin-top: auto; padding-top: 40px; padding-top: 14px; border-top: 1px solid var(--bc-line); display: flex; justify-content: space-between; align-items: center; }
 .bc-foot img { height: 22px; width: auto; opacity: .85; }
 @media (max-width: 900px) { .bc-shell { grid-template-columns: 1fr; } .bc-sidebar { display: none; } .bc-herostats, .bc-statband { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
