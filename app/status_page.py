@@ -88,10 +88,8 @@ def render_sweeps(worker_alive: bool) -> str:
     e = html.escape
     tone, label, _, _ = service_state(worker_alive)
     out = [f"<title>Beachsync · Sync Reports</title>{LINKS}", _shell_open("sweeps", "Sync Reports", tone, label),
-           '<div class="bc-page-head"><span class="bc-kicker bc-kicker--page">Safety Net</span><h1 class="bc-h1">Sync Reports</h1>'
-           '<p class="bc-intro">The nightly new-id sweep queues TigerBay records whose <em>created</em> webhook never arrived. '
-           'The daily drift sweep reconciles every record against HubSpot and re-queues any that differ (missed <em>modified</em> webhooks). '
-           'Each run is listed with what it found and how the queued events turned out.</p></div>']
+           '<div class="bc-page-head"><h1 class="bc-h1">Sync Reports</h1>'
+           '<p class="bc-intro">Nightly new-ID and daily drift sweeps that catch anything the webhooks missed.</p></div>']
     sweeps = db.list_sweeps()
     if not sweeps:
         out.append('<section class="bc-section"><p class="bc-empty">No reports yet. Nightly at 02:40 (new ids) and daily at 04:00 (drift).</p></section>')
@@ -161,8 +159,8 @@ def render(worker_alive: bool, worker_tick: float, resume_denied: bool = False) 
     if paused:
         service_tone, service_label = "fail", "Sync paused"
     out = [f"<title>Beachsync · Status</title>{LINKS}", _shell_open("status", "Status", service_tone, service_label),
-           '<div class="bc-page-head"><span class="bc-kicker bc-kicker--page">Profile Sync</span><h1 class="bc-h1">TigerBay → HubSpot</h1>'
-           '<p class="bc-intro">Customer and agent-staff profiles, kept in step by TigerBay webhooks with a nightly new-id sweep and a daily drift repair. Refreshes every minute.</p></div>']
+           '<div class="bc-page-head"><h1 class="bc-h1">TigerBay → HubSpot</h1>'
+           '<p class="bc-intro">Customer and agent-staff profiles, synced by webhook.</p></div>']
 
     # kill switch
     if paused:
