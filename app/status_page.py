@@ -41,7 +41,7 @@ def _t(ts):
 
 # Display names for internal action codes.
 ACTION_LABELS = {"noop": "no change", "create": "created", "update": "updated", "skipped": "skipped",
-                 "archive": "archived", "update-after-conflict": "updated (existing email)", "error": "error"}
+                 "archive": "archived", "stamped": "id-stamped only", "update-after-conflict": "updated (existing email)", "error": "error"}
 
 
 def _action(a) -> str:
@@ -271,7 +271,7 @@ def _event_rows(rows: list[dict]) -> str:
     return "".join(out)
 
 
-STATUSES = ["pending", "processing", "done", "skipped", "failed", "unparsed", "superseded", "dismissed"]
+STATUSES = ["pending", "processing", "done", "skipped", "failed", "unparsed", "superseded", "dismissed", "reverted"]
 SOURCES = ["webhook", "fanout", "sweep", "backfill", "replay"]
 
 
@@ -316,7 +316,7 @@ def render_digest(worker_alive: bool, win: str = "today") -> str:
     heros = [("Created", t.get("create", 0), "New HubSpot records"),
              ("Updated", t.get("update", 0) + t.get("update-after-conflict", 0), "Existing records changed"),
              ("Archived", t.get("archive", 0), "Flagged or removed"),
-             ("No Change", t.get("noop", 0), "Checked, already in step")]
+             ("No Change", t.get("noop", 0) + t.get("stamped", 0), "Checked, already in step" + (f" ({t['stamped']} id-stamped only)" if t.get("stamped") else ""))]
     out.append('<div class="bc-herostats">' + "".join(
         f'<div class="bc-herostat"><span class="bc-kicker">{k}</span><span class="bc-fig bc-fig--35">{v}</span><span class="bc-herostat-sub">{e(sub)}</span></div>'
         for k, v, sub in heros) + "</div>")
@@ -324,10 +324,13 @@ def render_digest(worker_alive: bool, win: str = "today") -> str:
     out.append('<div class="bc-statband">'
                f'<div class="bc-statcell"><span>Events Received</span><strong>{sum(rec.values())}</strong></div>'
                f'<div class="bc-statcell"><span>Processed</span><strong>{d["processed"]}</strong></div>'
-               f'<div class="bc-statcell"><span>Skipped</span><strong>{t.get("skipped", 0)}</strong></div>'
+               f'<div class="bc-statcell"><span>Skipped / Reverted</span><strong>{t.get("skipped", 0)} / {d["reverted"]}</strong></div>'
                f'<div class="bc-statcell"><span>Failed / Unparsed</span><strong>{_dot_word("fail" if d["failures"] else "pass", str(len(d["failures"])))}</strong></div></div>')
     if d["dry_run"]:
         out.append(f'<section class="bc-section"><p class="bc-intro bc-danger">{d["dry_run"]} of these were dry-run: diffed but not written to HubSpot.</p></section>')
+    if d["reverted"]:
+        out.append(f'<section class="bc-section"><p class="bc-intro">{d["reverted"]} write(s) in this window were later reverted and are excluded from the figures above. '
+                   '<a class="bc-link" href="/events?status=reverted">See them</a>.</p></section>')
 
     if d["actions"]:
         acts = sorted({a for c in d["actions"].values() for a in c})

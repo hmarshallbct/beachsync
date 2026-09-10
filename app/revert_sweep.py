@@ -13,7 +13,8 @@ changed field is set back to its ``from`` value (blank if it was empty), except:
   left at the webhook's value.
 
 Batch PATCH, 100 records per call, at the configured HubSpot rate. Each reverted
-event is marked ``reverted_at`` on its result so a re-run skips it.
+event gets ``status='reverted'`` (excluded from the dashboard and digest counts)
+and ``reverted_at`` on its result, so a re-run skips it.
 """
 import argparse
 import json
@@ -63,7 +64,7 @@ def _plan_events(since: float, until: float, revert_all: bool, ignore_reverted: 
     conn = db.connect()
     try:
         rows = conn.execute(
-            "SELECT id, entity, entity_id, processed_at, result FROM events WHERE source='sweep' AND status='done'"
+            "SELECT id, entity, entity_id, processed_at, result FROM events WHERE source='sweep' AND status IN ('done','reverted')"
             " AND processed_at>=? AND processed_at<? ORDER BY processed_at", (since, until)).fetchall()
         later = conn.execute(
             "SELECT entity, entity_id, processed_at, result FROM events WHERE source<>'sweep' AND status='done'"
@@ -141,7 +142,8 @@ def apply(items: list[dict], batch: int = 100) -> dict:
 
 def _mark(event_id: int) -> None:
     with db.tx() as conn:
-        conn.execute("UPDATE events SET result=json_set(result,'$.reverted_at',?) WHERE id=?", (time.time(), event_id))
+        conn.execute("UPDATE events SET status='reverted', result=json_set(result,'$.reverted_at',?) WHERE id=?",
+                     (time.time(), event_id))
 
 
 def main(argv=None) -> int:

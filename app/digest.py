@@ -13,6 +13,7 @@ from typing import Optional
 from app import db
 
 MAX_RECORDS = 500
+ID_STAMPS = {"tigerbay_id", "tigerbay_customer_id", "tigerbay_agent_id", "source_last_modified"}
 WINDOWS = {"today": "Today", "yesterday": "Yesterday", "7d": "Last 7 Days", "30d": "Last 30 Days"}
 
 
@@ -59,6 +60,9 @@ def build(since: float, until: float) -> dict:
             " substr(coalesce(last_error,''),1,300) AS last_error"
             " FROM events WHERE status IN ('failed','unparsed') AND received_at>=? AND received_at<? ORDER BY id",
             (since, until)).fetchall()
+        reverted = conn.execute(
+            "SELECT COUNT(*) FROM events WHERE status='reverted' AND processed_at>=? AND processed_at<?",
+            (since, until)).fetchone()[0]
         received = conn.execute(
             "SELECT source, COUNT(*) AS n FROM events WHERE received_at>=? AND received_at<? GROUP BY source",
             (since, until)).fetchall()
@@ -82,15 +86,17 @@ def build(since: float, until: float) -> dict:
             continue
         for ent, a in _walk(j, r["entity"]):
             act = a["action"]
+            changed = [c for c in (a.get("changed") or []) if c != "source_last_modified"]
+            if act == "update" and changed and set(changed) <= ID_STAMPS:
+                act = "stamped"          # only TigerBay id stamps written: not a data change
             actions[ent][act] += 1
             if a.get("dry_run"):
                 dry_run += 1
-            changed = [c for c in (a.get("changed") or []) if c != "source_last_modified"]
             if act == "create":
                 fields_created.update(changed)
             elif act in ("update", "update-after-conflict"):
                 fields_updated.update(changed)
-            if act != "noop":
+            if act not in ("noop", "stamped"):
                 records.append({"event_id": r["id"], "when": r["processed_at"], "source": r["source"],
                                 "entity": ent, "tigerbay_id": a.get("tigerbay_id", r["entity_id"]),
                                 "hubspot_id": a.get("hubspot_id"), "action": act, "changed": changed,
@@ -111,6 +117,7 @@ def build(since: float, until: float) -> dict:
         "failures": [dict(r) for r in failed],
         "sweeps": [{**dict(s), "summary": _load(s["summary"])} for s in sweeps],
         "dry_run": dry_run,
+        "reverted": reverted,
     }
 
 
@@ -126,7 +133,7 @@ def one_liner(d: dict, label: str) -> str:
     t = d["totals"]
     parts = []
     for act, word in (("create", "created"), ("update", "updated"), ("update-after-conflict", "updated (existing email)"),
-                      ("archive", "archived"), ("skipped", "skipped")):
+                      ("archive", "archived"), ("stamped", "id-stamped only"), ("skipped", "skipped")):
         if t.get(act):
             parts.append(f"{t[act]} {word}")
     noop = t.get("noop", 0)
@@ -136,7 +143,7 @@ def one_liner(d: dict, label: str) -> str:
     per = d["actions"]
     for ent in ("customer", "staff", "agency"):
         c = per.get(ent) or {}
-        n = sum(v for k, v in c.items() if k != "noop")
+        n = sum(v for k, v in c.items() if k not in ("noop", "stamped"))
         if n:
             bits.append(f"{ent} {n}")
     if bits:
@@ -148,4 +155,6 @@ def one_liner(d: dict, label: str) -> str:
         head += f". {len(d['failures'])} FAILED/unparsed needing attention"
     if d["dry_run"]:
         head += f". NOTE {d['dry_run']} were dry-run (not written)"
+    if d["reverted"]:
+        head += f". {d['reverted']} earlier writes were reverted and are not counted"
     return head + ". Detail: https://beachsync.bctuk.com/digest"

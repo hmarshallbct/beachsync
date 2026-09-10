@@ -27,23 +27,31 @@ def test_digest_rolls_up_actions_fields_and_failures():
                         "staff": [{"tigerbay_id": 51, "action": "archive", "changed": ["is_archived"]}]})
     # yesterday: excluded from today's window
     _done("customer", 9, {"entity": "customer", "tigerbay_id": 9, "action": "update", "changed": ["zip"]}, when=time.time() - 2 * 86400)
+    _done("customer", 4, {"entity": "customer", "tigerbay_id": 4, "hubspot_id": "13", "action": "update",
+                          "changed": ["tigerbay_customer_id", "source_last_modified"]})   # id stamp only
+    rv = _done("customer", 5, {"entity": "customer", "tigerbay_id": 5, "hubspot_id": "14", "action": "update", "changed": ["address"]})
+    with db.tx() as conn:
+        conn.execute("UPDATE events SET status='reverted' WHERE id=?", (rv,))
     bad = db.enqueue_event("customer", "modified", 7)
     db.finish_event(bad, "failed", error="boom")
 
     d = digest.build(*digest.window("today"))
-    assert d["totals"] == {"update": 2, "noop": 2, "create": 1, "archive": 1}
-    assert d["actions"]["customer"] == {"update": 2, "noop": 1}
+    assert d["totals"] == {"update": 2, "noop": 2, "create": 1, "archive": 1, "stamped": 1}
+    assert d["actions"]["customer"] == {"update": 2, "noop": 1, "stamped": 1}
+    assert d["reverted"] == 1
+    assert 5 not in [r["tigerbay_id"] for r in d["records"]]
     assert d["actions"]["staff"] == {"create": 1, "archive": 1}
     assert d["fields_updated"] == {"phone": 2, "city": 1}          # source_last_modified stripped
     assert d["fields_created"] == {"email": 1, "firstname": 1}
     assert [r["tigerbay_id"] for r in d["records"]] == [1, 2, 40, 51]
     assert d["dry_run"] == 1
     assert [f["id"] for f in d["failures"]] == [bad]
-    assert d["received"] == {"webhook": 5, "sweep": 1}
+    assert d["received"] == {"webhook": 7, "sweep": 1}
 
     text = digest.one_liner(d, "yesterday")
-    assert text.startswith("beachsync yesterday: 1 created, 2 updated, 1 archived; 2 checked with no change (customer 2, staff 2)")
-    assert "Top fields: phone 2, city 1" in text and "1 FAILED" in text and "dry-run" in text
+    assert text.startswith("beachsync yesterday: 1 created, 2 updated, 1 archived, 1 id-stamped only; 2 checked with no change (customer 2, staff 2)")
+    assert "1 id-stamped only" in text and "(customer 2, staff 2)" in text
+    assert "Top fields: phone 2, city 1" in text and "1 FAILED" in text and "dry-run" in text and "1 earlier writes were reverted" in text
 
     d7 = digest.build(*digest.window("7d"))
     assert d7["totals"]["update"] == 3
