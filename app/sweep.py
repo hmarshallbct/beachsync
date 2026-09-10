@@ -1,16 +1,19 @@
 """Safety net for missed webhooks.
 
     python -m app.sweep new-ids     # nightly: queue TigerBay records created since the last id we saw
-    python -m app.sweep drift       # weekly: reconcile everything; queue matched records that differ
+    python -m app.sweep drift       # daily: reconcile everything and REPORT what differs (writes nothing)
+    python -m app.sweep drift --queue   # ...and queue the drifted records for re-sync (deliberate backfill only)
 
 new-ids: TigerBay ids are sequential, so anything above the highest customer /
 staff id this service has handled is a record whose 'created' webhook we never
 got. Customers are probed by id; staff are found via each agency's staff list.
 
-drift: runs the reconciliation report and queues (source=sweep, so an existing
-HubSpot email is preserved) every matched record with at least one actionable
-difference. Records with no HubSpot match are NOT created here: the HubSpot
-data was hand-curated and new records are covered by new-ids / webhooks.
+drift: runs the reconciliation report and records, per matched record, whether
+it differs from TigerBay. It is REPORT-ONLY by default: the HubSpot data was
+hand-curated and must only change through real TigerBay webhooks. On
+2026-09-10 the first queued run overwrote ~14k curated records and had to be
+reverted (app.revert_sweep). ``--queue`` re-enables queueing (source=sweep, so
+an existing HubSpot email is preserved) for a deliberate one-off backfill.
 """
 import argparse
 import csv
@@ -63,7 +66,7 @@ def sweep_new_ids() -> dict:
     return out
 
 
-def sweep_drift(report_path: str) -> dict:
+def sweep_drift(report_path: str, queue: bool = False) -> dict:
     from app.reconcile_report import main as report
     report(["--out", report_path, "--threads", "8"])
     to_queue = {"customer": set(), "agent": set()}
@@ -77,10 +80,11 @@ def sweep_drift(report_path: str) -> dict:
         for row in csv.DictReader(fh):
             if row["would_update"] == "yes" and row["field"] != "<no hubspot record>":
                 to_queue["customer" if row["entity"] == "customer" else "agent"].add(int(row["tigerbay_id"]))
-    for entity, ids in to_queue.items():
-        db.enqueue_many(entity, "modified", sorted(ids), source="sweep")
-    return {"customer": len(to_queue["customer"]), "agent": len(to_queue["agent"]),
-            "report": summary, "queued_ids": {k: sorted(v)[:500] for k, v in to_queue.items()}}
+    if queue:
+        for entity, ids in to_queue.items():
+            db.enqueue_many(entity, "modified", sorted(ids), source="sweep")
+    return {"customer": len(to_queue["customer"]), "agent": len(to_queue["agent"]), "queued": queue,
+            "report": summary, "drifted_ids" if not queue else "queued_ids": {k: sorted(v)[:500] for k, v in to_queue.items()}}
 
 
 def main(argv=None) -> int:
@@ -88,10 +92,12 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("what", choices=["new-ids", "drift"])
     ap.add_argument("--report", default=f"/data/drift-{time.strftime('%Y-%m-%d')}.csv")
+    ap.add_argument("--queue", action="store_true",
+                    help="drift only: queue the drifted records for re-sync (default is report-only)")
     args = ap.parse_args(argv)
     sid = db.start_sweep(args.what)
     try:
-        result = sweep_new_ids() if args.what == "new-ids" else sweep_drift(args.report)
+        result = sweep_new_ids() if args.what == "new-ids" else sweep_drift(args.report, queue=args.queue)
     except Exception as exc:  # noqa: BLE001
         db.finish_sweep(sid, ok=False, error=f"{type(exc).__name__}: {exc}")
         raise

@@ -26,3 +26,18 @@ def test_max_seen_id():
     db.enqueue_event("customer", "created", 31756)
     db.put_map("staff", 28585, "contacts", "1", None, None)
     assert db.max_seen_id("customer") == 31756 and db.max_seen_id("agent") == 28585
+
+
+def test_drift_is_report_only_unless_queued(tmp_path, monkeypatch):
+    import app.sweep as sweep
+    from app import db
+    csv_path = tmp_path / "drift.csv"
+    csv_path.write_text("entity,tigerbay_id,field,would_update\ncustomer,5,address,yes\nagent,7,phone,yes\ncustomer,9,<no hubspot record>,yes\n")
+    monkeypatch.setattr("app.reconcile_report.main", lambda argv: 0)
+    res = sweep.sweep_drift(str(csv_path))
+    assert res["customer"] == 1 and res["agent"] == 1 and res["queued"] is False
+    assert res["drifted_ids"] == {"customer": [5], "agent": [7]}
+    assert db.counts().get("pending", 0) == 0
+    res = sweep.sweep_drift(str(csv_path), queue=True)
+    assert res["queued"] is True and res["queued_ids"] == {"customer": [5], "agent": [7]}
+    assert db.counts().get("pending", 0) == 2

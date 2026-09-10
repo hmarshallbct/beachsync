@@ -91,7 +91,7 @@ def render_sweeps(worker_alive: bool) -> str:
     tone, label, _, _ = service_state(worker_alive)
     out = [f"<title>Beachsync · Sync Reports</title>{LINKS}", _shell_open("sweeps", "Sync Reports", tone, label),
            '<div class="bc-page-head"><h1 class="bc-h1">Sync Reports</h1>'
-           '<p class="bc-intro">Nightly new-ID and daily drift sweeps that catch anything the webhooks missed.</p></div>']
+           '<p class="bc-intro">Nightly new-ID sweep (queues missed creates) and daily drift report (report-only: shows what differs, writes nothing).</p></div>']
     sweeps = db.list_sweeps()
     if not sweeps:
         out.append('<section class="bc-section"><p class="bc-empty">No reports yet. Nightly at 02:40 (new ids) and daily at 04:00 (drift).</p></section>')
@@ -115,8 +115,9 @@ def render_sweeps(worker_alive: bool) -> str:
                       ("Scanned From", f'customer {sm.get("customers", {}).get("from")} · staff {sm.get("staff", {}).get("from")}')]
         elif sw["kind"] == "drift" and sm:
             rep = sm.get("report") or {}
-            cells += [("Customers Re-queued", f'<span class="bc-fig">{sm.get("customer", 0)}</span>'),
-                      ("Staff Re-queued", f'<span class="bc-fig">{sm.get("agent", 0)}</span>'),
+            word = "Re-queued" if sm.get("queued") else "Drifted"
+            cells += [(f"Customers {word}", f'<span class="bc-fig">{sm.get("customer", 0)}</span>'),
+                      (f"Staff {word}", f'<span class="bc-fig">{sm.get("agent", 0)}</span>'),
                       ("Checked", f'customers {rep.get("customers", {}).get("checked", "?")} · staff {rep.get("staff", {}).get("checked", "?")}')]
         elif sw["error"]:
             cells += [("Error", f"<code>{e(sw['error'][:200])}</code>")]

@@ -197,10 +197,13 @@ The suite uses in-memory fakes of both APIs with the real payload shapes.
   staff with ids above the highest this service has seen and queues them as
   `created` (source `sweep`).
 - `bin/sweep_drift.sh` (cron, daily 04:00): runs the full reconciliation and
-  queues every matched record with an actionable difference as `modified`
-  (source `sweep`, so an existing HubSpot email is kept). Records with no
-  HubSpot match are not created by the sweep. Both sweeps post a rollup to the
-  Teams alert channel (new-ids only when it found something).
+  records how many matched records differ. **Report-only**: it writes nothing
+  to HubSpot. The curated HubSpot data only changes through real TigerBay
+  webhooks (on 2026-09-10 a queuing run overwrote ~14k records and was reverted
+  with `python -m app.revert_sweep`). A deliberate one-off re-sync of the
+  drifted records is `python -m app.sweep drift --queue` (source `sweep`, so an
+  existing HubSpot email is kept; nothing is created). Both sweeps post a rollup
+  to the Teams alert channel (new-ids only when it found something).
 
 ## Status dashboard
 

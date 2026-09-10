@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
-# Daily: full TigerBay vs HubSpot reconciliation; queues matched records that
-# drifted (missed 'modified' webhooks). Existing HubSpot emails are preserved.
-# Posts a one-line rollup to Teams every run; the CSV stays in data/ for 60 days.
+# Daily: full TigerBay vs HubSpot reconciliation, REPORT-ONLY. Records how many
+# matched records differ and keeps the CSV in data/ for 60 days; writes nothing
+# to HubSpot (curated data only changes via real webhooks). To deliberately
+# re-sync the drifted records run:  docker compose exec beachsync python -m app.sweep drift --queue
+# Posts a one-line rollup to Teams every run.
 set -u
 cd /home/bctadmin/beachsync
 
@@ -19,4 +21,4 @@ notify() {
 OUT=$(docker compose exec -T beachsync python -m app.sweep drift 2>>logs/sweep.log) || { echo "$(date -Is) sweep drift FAILED" >> logs/sweep.log; notify "beachsync drift sweep FAILED; see ~/beachsync/logs/sweep.log"; exit 0; }
 echo "$(date -Is) drift $OUT" >> logs/sweep.log
 find data -name 'drift-*.csv' -mtime +60 -delete
-notify "beachsync daily drift rollup: queued $(printf '%s' "$OUT" | jq -r '.customer') customer(s) and $(printf '%s' "$OUT" | jq -r '.agent') staff whose TigerBay record differed from HubSpot (missed modifies, now re-synced). Detail: ~/beachsync/data/drift-$(date +%F).csv and https://beachsync.bctuk.com/status"
+notify "beachsync daily drift report (report-only, nothing written): $(printf '%s' "$OUT" | jq -r '.customer') customer(s) and $(printf '%s' "$OUT" | jq -r '.agent') staff differ between TigerBay and HubSpot. Detail: https://beachsync.bctuk.com/sweeps"
