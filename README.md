@@ -183,6 +183,9 @@ The suite uses in-memory fakes of both APIs with the real payload shapes.
   Teams webhook in `beachstats/.alert_webhook` on container/worker down, dry-run
   on, new failed events, unparsed webhooks, a stale backlog, or no webhook from
   TigerBay for 7 days. Acknowledge a known failure with `/admin/events/{id}/dismiss`.
+- `bin/daily_digest.sh` (cron, daily 07:30): posts yesterday's change digest
+  (counts and ids only) to the Teams channel; `bin/daily_digest.sh 7d` for a
+  weekly one. Field-level detail stays on the LAN page `/digest`.
 - `bin/backup_db.sh` (cron, nightly 03:15): SQLite online backup of
   `data/beachsync.db` into `backups/`, gzipped, 30 days kept. Restore = stop the
   container, gunzip over `data/beachsync.db` (delete any `-wal`/`-shm` sidecars
@@ -207,6 +210,11 @@ events per day, failures needing attention, recent events. Ids only, no
 personal data. `/status.json` for the raw numbers. `/events` lists the queue with status and
 source filters; `/sweeps` shows every nightly new-id and daily drift run with
 what it found, how the queued events turned out, and the drift CSV to download.
+`/digest?window=today|yesterday|7d|30d` is the **change digest**: what was
+actually written to HubSpot in that window (created / updated / archived /
+no-change per record type, the fields updated most, every record touched with
+its changed field names, failures, sweeps). `/digest.json` gives the numbers
+plus a one-line `text` summary.
 
 **Kill switch** on the status page: *Pause sync* (one click, optional reason)
 stops all HubSpot writes immediately and persists across restarts; webhooks keep

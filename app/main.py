@@ -218,6 +218,24 @@ def sweeps_page():
     return HTMLResponse(render_sweeps(alive))
 
 
+@app.get("/digest", response_class=HTMLResponse)
+def digest_page(window: str = "today"):
+    """Daily/weekly change digest: what was written to HubSpot. Ids only."""
+    from app.status_page import render_digest
+    alive = bool(_worker and _worker.is_alive() and _worker.worker_alive()) if settings.worker_enabled else True
+    return HTMLResponse(render_digest(alive, window))
+
+
+@app.get("/digest.json")
+def digest_json(window: str = "today"):
+    from app import digest as dg
+    if window not in dg.WINDOWS:
+        raise HTTPException(400, f"window must be one of {', '.join(dg.WINDOWS)}")
+    d = dg.build(*dg.window(window))
+    d["text"] = dg.one_liner(d, dg.WINDOWS[window].lower())
+    return d
+
+
 @app.get("/sweeps/{sweep_id}/report")
 def sweep_report(sweep_id: int):
     from fastapi.responses import FileResponse

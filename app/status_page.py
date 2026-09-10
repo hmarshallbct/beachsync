@@ -59,7 +59,7 @@ def _pill(text: str, tone: str) -> str:
 
 def _shell_open(active: str, crumb: str, service_tone: str, service_label: str) -> str:
     e = html.escape
-    rows = [("status", "/status", "Status"), ("events", "/events", "Events"), ("sweeps", "/sweeps", "Sync Reports")]
+    rows = [("status", "/status", "Status"), ("events", "/events", "Events"), ("sweeps", "/sweeps", "Sync Reports"), ("digest", "/digest", "Changes")]
     nav = "".join(f'<a class="bc-nav-row{" bc-nav-row--on" if k == active else ""}" href="{href}"'
                   f'{" aria-current=page" if k == active else ""}>{label}</a>' for k, href, label in rows)
     return ('<div class="bc-shell"><aside class="bc-sidebar">'
@@ -296,3 +296,86 @@ def render_events(worker_alive: bool, status: str = "", source: str = "", limit:
 
 def _dot_word(tone: str, word: str) -> str:
     return f'<span class="bc-status"><span class="bc-dot bc-dot--{tone}"></span><span class="bc-status-label">{html.escape(word)}</span></span>'
+
+
+def render_digest(worker_alive: bool, win: str = "today") -> str:
+    from app import digest as dg
+    e = html.escape
+    tone, label, _, _ = service_state(worker_alive)
+    win = win if win in dg.WINDOWS else "today"
+    since, until = dg.window(win)
+    d = dg.build(since, until)
+    t = d["totals"]
+    out = [f"<title>Beachsync · Changes</title>{LINKS}", _shell_open("digest", "Changes", tone, label),
+           '<div class="bc-page-head"><h1 class="bc-h1">What Changed</h1>'
+           '<p class="bc-intro">What the sync actually wrote to HubSpot, rolled up over a day or a week. IDs only.</p></div>',
+           '<section class="bc-section"><form method="get" action="/digest" class="bc-filter"><label class="bc-kicker">Window</label>'
+           '<select class="bc-input bc-select" name="window" onchange="this.form.submit()">'
+           + "".join(f'<option value="{k}"{" selected" if k == win else ""}>{v}</option>' for k, v in dg.WINDOWS.items())
+           + f'</select><span class="bc-meta">{e(_t(since))} → {e(_t(until))}</span></form></section>']
+    heros = [("Created", t.get("create", 0), "New HubSpot records"),
+             ("Updated", t.get("update", 0) + t.get("update-after-conflict", 0), "Existing records changed"),
+             ("Archived", t.get("archive", 0), "Flagged or removed"),
+             ("No Change", t.get("noop", 0), "Checked, already in step")]
+    out.append('<div class="bc-herostats">' + "".join(
+        f'<div class="bc-herostat"><span class="bc-kicker">{k}</span><span class="bc-fig bc-fig--35">{v}</span><span class="bc-herostat-sub">{e(sub)}</span></div>'
+        for k, v, sub in heros) + "</div>")
+    rec = d["received"]
+    out.append('<div class="bc-statband">'
+               f'<div class="bc-statcell"><span>Events Received</span><strong>{sum(rec.values())}</strong></div>'
+               f'<div class="bc-statcell"><span>Processed</span><strong>{d["processed"]}</strong></div>'
+               f'<div class="bc-statcell"><span>Skipped</span><strong>{t.get("skipped", 0)}</strong></div>'
+               f'<div class="bc-statcell"><span>Failed / Unparsed</span><strong>{_dot_word("fail" if d["failures"] else "pass", str(len(d["failures"])))}</strong></div></div>')
+    if d["dry_run"]:
+        out.append(f'<section class="bc-section"><p class="bc-intro bc-danger">{d["dry_run"]} of these were dry-run: diffed but not written to HubSpot.</p></section>')
+
+    if d["actions"]:
+        acts = sorted({a for c in d["actions"].values() for a in c})
+        out.append('<section class="bc-section"><div class="bc-section-head"><h2 class="bc-h2">By Record Type</h2><span class="bc-meta">outcome per sync</span></div>'
+                   '<table class="bc-grid"><tr><th>Type</th>' + "".join(f"<th>{e(_action(a))}</th>" for a in acts) + "</tr>")
+        for ent in sorted(d["actions"]):
+            c = d["actions"][ent]
+            out.append(f"<tr><td>{e(ent)}</td>" + "".join(f'<td class="num" style="text-align:left">{c.get(a, 0)}</td>' for a in acts) + "</tr>")
+        out.append("</table></section>")
+    if d["fields_updated"]:
+        top = list(d["fields_updated"].items())[:12]
+        out.append('<section class="bc-section"><div class="bc-section-head"><h2 class="bc-h2">Fields Updated</h2><span class="bc-meta">on existing records, top 12</span></div>'
+                   '<table class="bc-grid"><tr>' + "".join(f"<th>{e(k)}</th>" for k, _ in top) + "</tr><tr>"
+                   + "".join(f'<td class="num" style="text-align:left">{n}</td>' for _, n in top) + "</tr></table></section>")
+
+    out.append('<section class="bc-section"><div class="bc-section-head"><h2 class="bc-h2">Records Touched</h2>'
+               f'<span class="bc-meta">{d["records_total"]} record(s)' + (f", last {len(d['records'])} shown" if d["records_total"] > len(d["records"]) else "") + "</span></div>")
+    if d["records"]:
+        out.append('<table class="bc-grid"><tr><th>When</th><th>Type</th><th>TigerBay ID</th><th>HubSpot ID</th><th>Outcome</th><th>Fields</th><th>Source</th><th>Event</th></tr>')
+        for r in reversed(d["records"]):
+            flds = ", ".join(r["changed"][:8]) + ("…" if len(r["changed"]) > 8 else "")
+            if r.get("note"):
+                flds = (flds + " — " if flds else "") + r["note"]
+            out.append(f'<tr><td class="when">{_t(r["when"])}</td><td>{e(r["entity"])}</td><td>{r["tigerbay_id"] or ""}</td><td class="mute">{e(str(r["hubspot_id"] or ""))}</td>'
+                       f'<td>{e(_action(r["action"]))}</td><td class="mute">{e(flds)}</td><td class="mute">{e(r["source"])}</td><td class="mute">#{r["event_id"]}</td></tr>')
+        out.append("</table>")
+    else:
+        out.append('<p class="bc-empty">Nothing was changed in HubSpot in this window.</p>')
+    out.append("</section>")
+
+    if d["failures"]:
+        out.append('<section class="bc-section"><div class="bc-section-head"><h2 class="bc-h2">Needs Attention</h2><span class="bc-meta">failed and unparsed in this window</span></div>'
+                   '<table class="bc-grid"><tr><th>#</th><th>When</th><th>Source</th><th>Entity</th><th>Event</th><th>ID</th><th>Status</th><th>Tries</th><th>Error</th></tr>')
+        for p in d["failures"]:
+            out.append(f'<tr><td class="mute">{p["id"]}</td><td class="when">{_t(p["received_at"])}</td><td>{e(p["source"])}</td><td>{e(p["entity"])}</td>'
+                       f'<td>{e(p["event"])}</td><td>{p["entity_id"] or ""}</td><td>{_dot(p["status"])}</td><td>{p["attempts"]}</td><td><code>{e(p["last_error"])}</code></td></tr>')
+        out.append("</table></section>")
+    if d["sweeps"]:
+        out.append('<section class="bc-section"><div class="bc-section-head"><h2 class="bc-h2">Sweeps</h2><span class="bc-meta">safety-net runs in this window</span></div><table class="bc-grid"><tr><th>When</th><th>Kind</th><th>Run</th><th>Found</th></tr>')
+        for s in d["sweeps"]:
+            sm = s.get("summary") or {}
+            if s["kind"] == "new-ids":
+                found = f'{len(sm.get("customers", {}).get("queued", []))} customers, {len(sm.get("staff", {}).get("queued", []))} staff'
+            else:
+                found = f'{sm.get("customer", 0)} customers, {sm.get("agent", 0)} staff drifted'
+            state = _dot_word("warn", "Running") if s["ok"] is None else (_dot_word("pass", "Completed") if s["ok"] else _dot_word("fail", "Failed"))
+            out.append(f'<tr><td class="when">{_t(s["started_at"])}</td><td>{"New-ID" if s["kind"] == "new-ids" else "Drift"}</td><td>{state}</td><td class="mute">{e(found)}</td></tr>')
+        out.append('</table><p class="bc-meta" style="margin-top:12px"><a class="bc-link" href="/sweeps">Full sync reports</a></p></section>')
+    out.append('<div class="bc-foot"><span class="bc-meta">Beachsync · Beachcomber Tours</span>'
+               '<img src="/static/logos/logo-wordmark-navy.svg" alt="Beachcomber Tours"></div></main></div></div>')
+    return "".join(out)
