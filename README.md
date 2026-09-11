@@ -126,6 +126,8 @@ stored on the event row, nothing is written to HubSpot.
 
 ### Public exposure (edge proxy)
 
+> **Update 2026-09-11:** live as `beachsync.beachcomberapi.uk` behind Cloudflare (proxied DNS, Cloudflare Origin CA wildcard cert in the edge proxy), so steps 1 and 3 below describe the original GoDaddy / Let's Encrypt plan rather than the current setup; the daily drift sweep is report-only (see below) and no `backfill all` cron should be added.
+
 1. Add a public DNS **A record** `beachsync.beachcomberapi.uk → 195.224.77.34` (GoDaddy, same zone as `netbird.beachcombertours.uk`).
 2. `cp deploy/nginx-beachsync.conf /home/bctadmin/edgerunner/deploy/nginx/conf.d/beachsync.conf`
 3. `deploy/issue-cert.sh` (creates a temp self-signed pair, reloads nginx, issues the Let's Encrypt cert via the shared acme webroot, installs it, reloads again). Renewal is handled by the existing acme.sh cron.
